@@ -99,7 +99,7 @@ a.tel{color:var(--p);text-decoration:none;font-weight:600}
 <script>
 'use strict';
 /* ============ Yardımcılar ============ */
-const VERSION='1.6';
+const VERSION='1.9';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
@@ -125,6 +125,16 @@ const ns=n=>(n==null||n==='')?'':(typeof n==='string'?n:String(n).replace('.',',
 const fmt=new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:0,maximumFractionDigits:2});
 const money=n=>fmt.format(round2(num(n)));
 const lc=s=>String(s||'').toLocaleLowerCase('tr');
+// İlaç dozu: adet = depodan düşen (tam ampul), uyg = hastaya uygulanan (örn. 0,5)
+const FRS={0.25:'¼',0.5:'½',0.75:'¾'};
+function fmtDoz(n){n=round2(num(n));const w=Math.floor(n+1e-9),f=round2(n-w);if(!f)return String(w);return FRS[f]?(w?w:'')+FRS[f]:ns(n);}
+const dozFrac=i=>i.uyg!=null?round2(i.uyg-(i.adet-1)):null;
+const itemTxt=i=>i.uyg!=null&&i.uyg!==i.adet?`${esc(i.ad)} ${fmtDoz(i.uyg)} (depodan ${i.adet})`:`${esc(i.ad)}${i.adet!==1?' ×'+i.adet:''}`;
+function addDoz(list,ad,adet,uyg){
+  const u=uyg!=null?uyg:adet;let it=list.find(i=>lc(i.ad)===lc(ad));
+  if(it){it.uyg=round2((it.uyg!=null?it.uyg:it.adet)+u);it.adet+=adet;}else{it={ad,adet,uyg:u};list.push(it);}
+  if(it.uyg===it.adet)delete it.uyg;
+}
 function ageOf(d){if(!d)return '';const t=new Date(),[y,m,dd]=d.split('-').map(Number);let a=t.getFullYear()-y;if(t.getMonth()+1<m||(t.getMonth()+1===m&&t.getDate()<dd))a--;return a;}
 function validTC(t){
   if(!/^\d{11}$/.test(t)||t[0]==='0') return false;
@@ -155,7 +165,7 @@ function defaults(){
   const st=(id,ad,tip)=>({id,ad,tip,adet:0,birim:0,minAdet:0,skt:''});
   return {
     v:1,patients:[],visits:[],plans:[],calls:[],files:[],purchases:[],expenses:[],nurses:[],extPay:[],adj:[],
-    tests:[],
+    tests:[],testGroups:[],
     stock:[
       st('sr_iz250','İzotonik 250','serum'),st('sr_iz500','İzotonik 500','serum'),
       st('sr_rl250','Ringer Laktat 250','serum'),st('sr_rl500','Ringer Laktat 500','serum'),
@@ -171,7 +181,7 @@ function defaults(){
       {id:'s_lab',ad:'Laboratuvar',tip:'lab',ucret:0,malz:[]}
     ],
     expCats:['Yakıt','Araç bakım','Eczane (ilaç dışı)','Avukatlık ücreti','Diğer'],
-    settings:{lastBackup:null,sinceBackup:0,sktDays:30}
+    settings:{lastBackup:null,sinceBackup:0,sktDays:30,labK:1.1,satK:6}
   };
 }
 function ensureShape(s){const d=defaults();Object.keys(d).forEach(k=>{if(s[k]===undefined)s[k]=d[k];});Object.keys(d.settings).forEach(k=>{if(s.settings[k]===undefined)s.settings[k]=d.settings[k];});return s;}
@@ -220,7 +230,7 @@ function applyStock(v,sign){
 }
 
 /* ============ Durum ve gezinme ============ */
-let S,R={page:'home'},H=[],V=null,MF=null,PK=null,SD=null,BK=null,P={tab:'visits'};
+let S,R={page:'home'},H=[],V=null,MF=null,PK=null,SD=null,BK=null,P={tab:'visits'},GD=null,LX=null,VQ='';
 const pname=p=>p?((p.ad||'')+' '+(p.soyad||'')).trim():'(silinmiş hasta)';
 const patient=id=>S.patients.find(p=>p.id===id);
 const TABMAP={home:'home',patients:'patients',patient:'patients',visit:'patients',stock:'stock',lab:'lab',fin:'fin',more:'more',expenses:'more',nurses:'more',services:'more',backup:'more',import:'more'};
@@ -240,7 +250,7 @@ function render(keep){
   if(!keep)window.scrollTo(0,0);
 }
 function modal(html){const m=$('#modal');m.innerHTML=`<div class="box">${html}</div>`;m.classList.add('on');}
-function closeModal(){$('#modal').classList.remove('on');$('#modal').innerHTML='';MF=null;PK=null;SD=null;}
+function closeModal(){$('#modal').classList.remove('on');$('#modal').innerHTML='';MF=null;PK=null;SD=null;GD=null;}
 
 /* ============ Genel form penceresi ============ */
 function fieldHtml(f){
@@ -350,7 +360,7 @@ function pPatients(){
 
 function visitCard(v){
   const c=visitCalc(v),nurse=isNurse(v);
-  const its=(v.items||[]).map(i=>`${esc(i.ad)} ×${i.adet}`).join(', ');
+  const its=(v.items||[]).map(itemTxt).join(', ');
   const ts=(v.tests||[]).map(t=>esc(t.ad)).join(', ');
   const call=S.calls.find(x=>x.visitId===v.id&&x.done&&x.not);
   return `<div class="card" data-act="visitEdit" data-id="${v.id}">
@@ -394,7 +404,7 @@ function pPatient(){
 
 /* ---------- Ziyaret formu ---------- */
 function newV(pid,o){
-  o=o||{};
+  o=o||{};VQ='';
   return {patientId:pid,tarih:o.tarih||today(),saat:o.saat||nowTime(),kim:'ben',hizmetler:[],svcN:{},elle:false,items:[],tests:[],hizmetBedeli:'',ucret:'',odenen:'',ucretAuto:true,odenenAuto:true,hemsireUcret:'',labOdendi:true,sikayet:'',olcum:'',kontrol:'',not:o.not||'',planId:o.planId||null};
 }
 function labActive(){return V.hizmetler.some(id=>{const s=S.services.find(x=>x.id===id);return s&&s.tip==='lab';});}
@@ -422,10 +432,15 @@ function pVisit(){
   h+=`<h2>İlaçlar</h2><div class="chips">${ilac.map(i=>chip(has(i.id),'v-item',i.id,i.ad,sub(i))).join('')||'<span class="muted">Depo sayfasından ilaç ekle</span>'}</div>`;
   h+=`<h2>Ek malzeme</h2><div class="chips">${mal.map(i=>chip(has(i.id),'v-item',i.id,i.ad,sub(i))).join('')}</div>`;
   if(V.items.length){
-    h+=`<div class="card"><b>Kullanılanlar</b>${V.items.map(i=>`<div class="item" style="margin-top:8px"><div class="grow">${esc(i.ad)}<div class="muted">${nurse?'kayıt amaçlı':money(i.birim)+' / adet'}</div></div><div class="stepper"><button data-act="v-step" data-id="${i.id}" data-d="-1">−</button><b>${i.adet}</b><button data-act="v-step" data-id="${i.id}" data-d="1">+</button></div></div>`).join('')}</div>`;
+    h+=`<div class="card"><b>Kullanılanlar</b><div class="muted">Sayı, depodan düşen ampul/adet sayısıdır. Yarım yaptıysan "Doz"a dokun: hasta kaydında yarım görünür, depodan tam düşer.</div>${V.items.map(i=>`<div class="item" style="margin-top:8px"><div class="grow">${esc(i.ad)}<div class="muted">${nurse?'kayıt amaçlı':money(i.birim)+' / adet'}</div><button class="chip ${i.uyg!=null?'on':''}" style="min-height:30px;padding:3px 10px;margin-top:4px" data-act="v-doz" data-id="${i.id}">Doz: ${i.uyg!=null?fmtDoz(i.uyg)+' uygulandı':'tam'}</button></div><div class="stepper"><button data-act="v-step" data-id="${i.id}" data-d="-1">−</button><b>${i.adet}</b><button data-act="v-step" data-id="${i.id}" data-d="1">+</button></div></div>`).join('')}</div>`;
   }
   if(labActive()){
-    h+=`<h2>Tahliller</h2><div class="chips">${S.tests.map(t=>chip(V.tests.some(x=>x.id===t.id),'v-test',t.id,t.ad,money(t.satis))).join('')||'<span class="muted">Lab sayfasından tahlil ekle</span>'}</div>
+    const gs=S.testGroups.slice().sort(byAd),selT=V.tests;
+    h+=`<h2>Tahliller</h2>`;
+    if(gs.length)h+=`<div class="muted">Gruba dokununca içindeki testler eklenir, tekrar dokununca çıkar.</div><div class="chips">${gs.map(g=>{const ids=grpTests(g).map(t=>t.id);const on=ids.length>0&&ids.every(id=>selT.some(x=>x.id===id));return chip(on,'v-grp',g.id,g.ad,ids.length);}).join('')}</div>`;
+    else if(!S.tests.length)h+=`<div class="muted">Önce Lab sayfasından fiyat listesini (Excel) yükle.</div>`;
+    h+=`<div class="card"><b>Seçili testler (${selT.length})</b>${selT.length?`<div class="chips">${selT.map(t=>chip(true,'v-test',t.id,t.ad+' ✕',money(t.satis))).join('')}</div><div class="muted">Testler: hastaya ${money(selT.reduce((a,t)=>a+num(t.satis),0))} · laboratuvara ${money(selT.reduce((a,t)=>a+num(t.maliyet),0))}</div>`:'<div class="muted">Henüz test seçilmedi</div>'}
+    <input id="vt_q" placeholder="🔍 Tek tek test ara ve ekle" value="${esc(VQ)}" autocomplete="off" style="margin-top:8px"><div id="vt_l" style="margin-top:6px">${vtList()}</div></div>
     <div class="card"><label>Hizmet bedeli (bu hasta için, TL)<input data-v="hizmetBedeli" inputmode="decimal" value="${esc(ns(V.hizmetBedeli))}"></label>
     <label class="chk"><input type="checkbox" data-v="labOdendi" ${V.labOdendi?'checked':''}> Laboratuvara ödendi</label></div>`;
   }
@@ -438,6 +453,12 @@ function pVisit(){
   h+=`<div class="card sum" id="vsum"></div><div class="row"><button class="btn gray" data-act="back">Vazgeç</button><button class="btn" data-act="v-save">Kaydet</button></div>${V.id?'<button class="btn red full" style="margin-top:10px" data-act="v-del">Bu ziyareti sil</button>':''}`;
   return {t:V.id?'Ziyareti düzenle':'Yeni ziyaret',back:1,h};
 }
+function vtList(){
+  if(!VQ.trim())return '';
+  const L=testSearch(VQ,25);
+  return L.length?`<div class="chips">${L.map(t=>chip(V.tests.some(x=>x.id===t.id),'v-test',t.id,t.ad,money(testSale(t)))).join('')}</div>`:'<div class="muted">Bulunamadı</div>';
+}
+const testSnap=t=>({id:t.id,ad:t.ad,maliyet:testCost(t),satis:testSale(t)});
 function vRefresh(){
   if(!V)return;
   if(V.ucretAuto){V.ucret=autoUcret();const e=$('#v_ucret');if(e)e.value=ns(V.ucret);}
@@ -530,24 +551,146 @@ function stockAddForm(i){
 }
 
 /* ---------- Laboratuvar ---------- */
+// Liste fiyatı olan testte: laboratuvara = fiyat × labK, hastaya = fiyat × satK. Liste fiyatı yoksa elle girilen tutarlar.
+const hasF=t=>t.fiyat!=null&&t.fiyat!=='';
+const testCost=t=>hasF(t)?round2(num(t.fiyat)*num(S.settings.labK)):num(t.maliyet);
+const testSale=t=>hasF(t)?round2(num(t.fiyat)*num(S.settings.satK)):num(t.satis);
+const grpTests=g=>(g.tests||[]).map(id=>S.tests.find(t=>t.id===id)).filter(Boolean);
+const byAd=(a,b)=>a.ad.localeCompare(b.ad,'tr');
+function testSearch(q,lim){
+  const ws=fold(q).split(/\s+/).filter(Boolean);if(!ws.length)return [];
+  const L=S.tests.filter(t=>{const h=fold(t.ad+' '+(t.kod||''));return ws.every(w=>h.includes(w));});
+  const rank=t=>{const a=fold(t.ad);return a.startsWith(ws[0])?0:a.split(/[\s,(/-]+/).some(x=>x.startsWith(ws[0]))?1:2;};
+  return L.sort((a,b)=>rank(a)-rank(b)||byAd(a,b)).slice(0,lim);
+}
+function labList(q){
+  const qq=String(q||'').trim();
+  const L=qq?testSearch(qq,60):S.tests.slice().sort(byAd).slice(0,30);
+  const head=qq?(L.length?'':'<div class="empty">Bulunamadı</div>'):(S.tests.length>30?`<div class="muted" style="margin:8px 2px">${S.tests.length} testten ilk 30'u gösteriliyor. Aramak için yukarıya yaz.</div>`:'');
+  return head+L.map(t=>`<div class="card item" data-act="testEdit" data-id="${t.id}"><div class="grow"><b>${esc(t.ad)}</b><div class="muted">${t.kod?esc(t.kod)+' · ':''}${hasF(t)?'Liste '+money(t.fiyat)+' · ':''}Laboratuvara ${money(testCost(t))} · Hastaya ${money(testSale(t))}</div></div></div>`).join('');
+}
 function pLab(){
-  const L=S.tests.slice().sort((a,b)=>a.ad.localeCompare(b.ad,'tr'));
-  let h=`<div class="note">Tahlil fiyatını değiştirirsen sadece sonraki ziyaretlere uygulanır, eski kayıtlar değişmez.</div><button class="btn full" data-act="testNew">+ Yeni tahlil</button>`;
-  h+=L.length?L.map(t=>`<div class="card item" data-act="testEdit" data-id="${t.id}"><div class="grow"><b>${esc(t.ad)}</b><div class="muted">Laboratuvara ${money(t.maliyet)} · Satış ${money(t.satis)}</div></div><div class="grn"><b>${money(num(t.satis)-num(t.maliyet))}</b></div></div>`).join(''):'<div class="empty">Henüz tahlil yok. Örnek: Tam kan sayımı, maliyet 100, satış 600.</div>';
+  const st=S.settings;
+  let h=`<div class="card"><b>Fiyat listesi</b><div class="muted">${S.tests.length} test kayıtlı.<br>Laboratuvara ödenen = liste fiyatı × <b>${ns(st.labK)}</b><br>Hastadan alınan = liste fiyatı × <b>${ns(st.satK)}</b> + hizmet bedeli (ziyarette elle yazılır)</div>
+  <div class="row" style="margin-top:8px"><button class="btn sm" data-act="labXl">📄 Excel'den yükle</button><button class="btn sm gray" data-act="labK">Çarpanları değiştir</button></div>
+  <input type="file" id="xlIn" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" style="display:none"></div>
+  <div class="note">Fiyat veya çarpan değişirse sadece sonraki ziyaretlere uygulanır, eski kayıtlar değişmez.</div>`;
+  h+=`<h2>Test grupları</h2><button class="btn full" data-act="grpNew">+ Yeni grup</button>`;
+  h+=S.testGroups.length?S.testGroups.slice().sort(byAd).map(g=>{const ts=grpTests(g);return `<div class="card item" data-act="grpEdit" data-id="${g.id}"><div class="grow"><b>${esc(g.ad)}</b> <span class="badge">${ts.length} test</span><div class="muted">Hastaya ${money(ts.reduce((a,t)=>a+testSale(t),0))} · Laboratuvara ${money(ts.reduce((a,t)=>a+testCost(t),0))}</div><div class="muted">${esc(ts.map(t=>t.ad).join(', ').slice(0,150))}</div></div><div class="muted">›</div></div>`;}).join(''):'<div class="empty">Henüz grup yok. Örnek: Kardiyovasküler → HDL, LDL, Total kolesterol</div>';
+  h+=`<h2>Testler</h2><input id="lab_q" placeholder="🔍 Test ara (ad veya kod)" value="${esc(R.lq||'')}" autocomplete="off"><button class="btn gray full" style="margin-top:8px" data-act="testNew">+ Elle test ekle</button><div id="lab_l">${labList(R.lq)}</div>`;
   h+=`<h2>ULTRALAB'a geçmiş ödemeler</h2><button class="btn gray full" data-act="payNew" data-tip="lab">+ Ödeme ekle</button>${payList('lab')}`;
   return {t:'Laboratuvar',h};
 }
 function testForm(t){
   openForm({
-    title:t?'Tahlili düzenle':'Yeni tahlil',
-    fields:[{k:'ad',label:'Tahlil adı',value:t&&t.ad},{k:'maliyet',label:'Laboratuvara ödediğim (TL)',type:'num',value:t&&ns(t.maliyet)},{k:'satis',label:'Hastaya satış fiyatı (TL)',type:'num',value:t&&ns(t.satis)}],
-    onDelete:t?()=>{if(!confirm('Tahlil silinsin mi? Eski kayıtlar etkilenmez.'))return;S.tests=S.tests.filter(x=>x.id!==t.id);save();closeModal();render(true);}:null,
+    title:t?'Testi düzenle':'Yeni test',
+    note:`Liste fiyatını yazarsan laboratuvar ücreti (×${ns(S.settings.labK)}) ve hastaya satış (×${ns(S.settings.satK)}) otomatik hesaplanır. Liste fiyatını boş bırakırsan alttaki iki tutarı elle yaz.`,
+    fields:[{k:'ad',label:'Test adı',value:t&&t.ad},{k:'kod',label:'Kod (isteğe bağlı)',value:t&&t.kod},
+      {k:'fiyat',label:'Liste fiyatı (TL)',type:'num',value:t&&hasF(t)?ns(t.fiyat):''},
+      {k:'maliyet',label:'Laboratuvara ödediğim (TL, liste fiyatı boşsa)',type:'num',value:t&&!hasF(t)?ns(t.maliyet):''},
+      {k:'satis',label:'Hastaya satış (TL, liste fiyatı boşsa)',type:'num',value:t&&!hasF(t)?ns(t.satis):''}],
+    onDelete:t?()=>{if(!confirm('Test silinsin mi? Eski kayıtlar etkilenmez, gruplardan çıkarılır.'))return;S.tests=S.tests.filter(x=>x.id!==t.id);S.testGroups.forEach(g=>g.tests=g.tests.filter(id=>id!==t.id));save();closeModal();render(true);}:null,
     onSave:v=>{
-      if(!v.ad){toast('Tahlil adı yaz');return false;}
-      const o={ad:v.ad,maliyet:num(v.maliyet),satis:num(v.satis)};
+      if(!v.ad){toast('Test adı yaz');return false;}
+      const o={ad:v.ad,kod:v.kod,fiyat:v.fiyat?num(v.fiyat):null,maliyet:num(v.maliyet),satis:num(v.satis)};
       if(t)Object.assign(t,o);else S.tests.push(Object.assign({id:uid()},o));
       save();render(true);
     }
+  });
+}
+/* ---------- Test grupları ---------- */
+function gdSync(){const e=$('#gd_ad');if(GD&&e)GD.ad=e.value;}
+function gdList(){
+  const q=(GD.q||'').trim();if(!q)return '<div class="muted">Eklemek istediğin testin adını yaz (örn. HDL).</div>';
+  const L=testSearch(q,25);
+  return L.length?`<div class="chips">${L.map(t=>chip(GD.tests.includes(t.id),'gd-tog',t.id,t.ad)).join('')}</div>`:'<div class="muted">Bulunamadı</div>';
+}
+function grpRender(){
+  const ts=GD.tests.map(id=>S.tests.find(t=>t.id===id)).filter(Boolean);
+  const sc=$('#modal')?$('#modal').scrollTop:0;
+  modal(`<h3>${GD.id?'Grubu düzenle':'Yeni grup'}</h3>
+  <label>Grup adı<input id="gd_ad" value="${esc(GD.ad)}" placeholder="Örn. Kardiyovasküler" autocomplete="off"></label>
+  <h2>Gruptaki testler (${ts.length})</h2>
+  ${ts.length?ts.map(t=>`<div class="item" style="margin-bottom:6px"><div class="grow">${esc(t.ad)}<div class="muted">Hastaya ${money(testSale(t))}</div></div><button class="btn sm gray" data-act="gd-rm" data-id="${t.id}">Çıkar</button></div>`).join('')+`<div class="muted" style="margin-top:6px"><b>Toplam:</b> hastaya ${money(ts.reduce((a,t)=>a+testSale(t),0))} · laboratuvara ${money(ts.reduce((a,t)=>a+testCost(t),0))}</div>`:'<div class="muted">Henüz test yok. Aşağıdan ara ve dokunarak ekle.</div>'}
+  <h2>Test ekle</h2><input id="gd_q" placeholder="🔍 Test ara" value="${esc(GD.q||'')}" autocomplete="off"><div id="gd_l" style="margin-top:8px">${gdList()}</div>
+  <div class="btns">${GD.id?'<button class="btn red" data-act="gd-del">Sil</button>':''}<button class="btn gray" data-act="m-close">Vazgeç</button><button class="btn" data-act="gd-save">Kaydet</button></div>`);
+  $('#modal').scrollTop=sc;
+}
+/* ---------- Excel / CSV'den test listesi ---------- */
+async function unzip(u8,want){
+  const dv=new DataView(u8.buffer,u8.byteOffset,u8.byteLength);
+  let e=-1;for(let i=u8.length-22;i>=Math.max(0,u8.length-65557);i--){if(dv.getUint32(i,true)===0x06054b50){e=i;break;}}
+  if(e<0)throw new Error('format');
+  const n=dv.getUint16(e+10,true);let p=dv.getUint32(e+16,true);const out={},td=new TextDecoder();
+  for(let k=0;k<n;k++){
+    if(dv.getUint32(p,true)!==0x02014b50)throw new Error('format');
+    const method=dv.getUint16(p+10,true),cs=dv.getUint32(p+20,true),nl=dv.getUint16(p+28,true),xl=dv.getUint16(p+30,true),cl=dv.getUint16(p+32,true),lo=dv.getUint32(p+42,true);
+    const name=td.decode(u8.subarray(p+46,p+46+nl));p+=46+nl+xl+cl;
+    if(!want(name))continue;
+    const st=lo+30+dv.getUint16(lo+26,true)+dv.getUint16(lo+28,true),data=u8.subarray(st,st+cs);
+    let raw;
+    if(method===0)raw=data;
+    else if(method===8){
+      if(typeof DecompressionStream==='undefined')throw new Error('nodecomp');
+      raw=new Uint8Array(await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+    }else throw new Error('format');
+    out[name]=td.decode(raw);
+  }
+  return out;
+}
+function csvSplit(l,sep){const o=[];let c='',q=false;for(let i=0;i<l.length;i++){const ch=l[i];if(q){if(ch==='"'){if(l[i+1]==='"'){c+='"';i++;}else q=false;}else c+=ch;}else if(ch==='"')q=true;else if(ch===sep){o.push(c);c='';}else c+=ch;}o.push(c);return o;}
+async function readSheetRows(file){
+  if(/\.csv$/i.test(file.name)||file.type==='text/csv'){
+    const txt=(await file.text()).replace(/^﻿/,'').replace(/\r/g,''),first=txt.split('\n')[0];
+    const sep=(first.match(/;/g)||[]).length>=(first.match(/,/g)||[]).length?';':',';
+    return txt.split('\n').map(l=>csvSplit(l,sep));
+  }
+  const files=await unzip(new Uint8Array(await file.arrayBuffer()),n=>n==='xl/sharedStrings.xml'||/^xl\/worksheets\/sheet\d+\.xml$/.test(n));
+  const dp=new DOMParser();
+  const ss=files['xl/sharedStrings.xml']?[...dp.parseFromString(files['xl/sharedStrings.xml'],'application/xml').getElementsByTagName('si')].map(si=>[...si.getElementsByTagName('t')].map(t=>t.textContent).join('')):[];
+  const sh=Object.keys(files).filter(n=>n.includes('worksheets')).sort((a,b)=>parseInt(a.match(/(\d+)\.xml/)[1])-parseInt(b.match(/(\d+)\.xml/)[1]))[0];
+  if(!sh)throw new Error('format');
+  const colIdx=s=>{let n=0;for(const ch of s.toUpperCase())n=n*26+ch.charCodeAt(0)-64;return n-1;};
+  const rows=[];
+  for(const r of dp.parseFromString(files[sh],'application/xml').getElementsByTagName('row')){
+    const arr=[];let pos=0;
+    for(const c of r.getElementsByTagName('c')){
+      const ref=(c.getAttribute('r')||'').replace(/\d+/g,'');const col=ref?colIdx(ref):pos;pos=col+1;
+      const t=c.getAttribute('t'),ve=c.getElementsByTagName('v')[0];let v;
+      if(t==='s')v=ss[+(ve?ve.textContent:-1)];
+      else if(t==='inlineStr')v=[...c.getElementsByTagName('t')].map(x=>x.textContent).join('');
+      else{v=ve?ve.textContent:'';if(t!=='str'&&t!=='e'&&v!==''&&!isNaN(+v))v=+v;}
+      arr[col]=v;
+    }
+    rows.push(arr);
+  }
+  return rows;
+}
+function parseTestRows(rows){
+  let hi=-1,nc=-1,pc=-1,kc=-1;
+  for(let i=0;i<Math.min(rows.length,30)&&hi<0;i++){
+    const r=(rows[i]||[]).map(x=>fold(String(x==null?'':x)).trim());
+    const n=r.findIndex(x=>/test|tahlil|analiz|ad[iı]?$/.test(x)),p=r.findIndex(x=>/fiyat|ucret|tutar/.test(x));
+    if(n>=0&&p>=0){hi=i;nc=n;pc=p;kc=r.findIndex(x=>/^kod/.test(x));}
+  }
+  if(hi<0)throw new Error('header');
+  const out=[];
+  for(let i=hi+1;i<rows.length;i++){
+    const r=rows[i]||[],ad=String(r[nc]==null?'':r[nc]).replace(/\s+/g,' ').trim();
+    const f=typeof r[pc]==='number'?r[pc]:num(String(r[pc]==null?'':r[pc]).replace(/[^\d.,]/g,''));
+    if(!ad||!(f>0))continue;
+    out.push({kod:kc>=0?String(r[kc]==null?'':r[kc]).trim():'',ad,fiyat:round2(f)});
+  }
+  return out;
+}
+function matchTests(list){
+  const cnt=(arr,k)=>arr.reduce((m,x)=>{if(x.kod)m[x.kod]=(m[x.kod]||0)+1;return m;},{});
+  const nk=cnt(list),ok=cnt(S.tests);
+  return list.map(x=>{
+    let t=S.tests.find(t=>t.kod&&x.kod&&t.kod===x.kod&&fold(t.ad)===fold(x.ad));
+    if(!t&&x.kod&&nk[x.kod]===1&&ok[x.kod]===1)t=S.tests.find(t=>t.kod===x.kod);
+    if(!t)t=S.tests.find(t=>fold(t.ad)===fold(x.ad));
+    return {x,t};
   });
 }
 
@@ -578,7 +721,7 @@ function breakdown(s){
   return h+'</table>';
 }
 function nurseStats(y,m){
-  const inP=d=>{const yy=+d.slice(0,4),mm=+d.slice(5,7)-1;return yy===y&&(m==null||mm===m);};
+  const inP=d=>{const yy=+d.slice(0,4),mm=+d.slice(5,7)-1;return (y==null||yy===y)&&(m==null||mm===m);};
   const o={};
   S.visits.filter(v=>isNurse(v)&&inP(v.tarih)).forEach(v=>{
     const n=o[v.kim]||(o[v.kim]={ad:(S.nurses.find(x=>x.id===v.kim)||{}).ad||v.kimAd||'Hemşire',n:0,t:0});
@@ -690,9 +833,9 @@ function expForm(e){
 /* ---------- Hemşireler ---------- */
 function pNurses(){
   const y=new Date().getFullYear();
-  const st=nurseStats(y,null);
+  const st=nurseStats(y,null),all=nurseStats(null,null);
   let h=`<button class="btn full" data-act="nurseNew">+ Hemşire ekle</button>`;
-  h+=S.nurses.length?S.nurses.map(n=>{const s=st.find(x=>x.ad===n.ad)||{n:0,t:0};return `<div class="card item" data-act="nurseEdit" data-id="${n.id}"><div class="grow"><b>${esc(n.ad)}</b><div class="muted">${y}: ${s.n} ziyaret · ${money(s.t)}</div></div><div class="muted">›</div></div>`;}).join(''):'<div class="empty">Henüz hemşire yok</div>';
+  h+=S.nurses.length?S.nurses.map(n=>{const s=st.find(x=>x.ad===n.ad)||{n:0,t:0},a=all.find(x=>x.ad===n.ad)||{n:0,t:0};return `<div class="card item" data-act="nurseEdit" data-id="${n.id}"><div class="grow"><b>${esc(n.ad)}</b><div class="muted">${y}: ${s.n} ziyaret · ${money(s.t)}</div><div class="muted">Tüm yıllar: ${a.n} ziyaret · ${money(a.t)}</div></div><div class="muted">›</div></div>`;}).join(''):'<div class="empty">Henüz hemşire yok</div>';
   h+=`<h2>Geçmiş hemşire ödemeleri</h2><button class="btn gray full" data-act="payNew" data-tip="hemsire">+ Geçmiş ödeme ekle</button>${payList('hemsire')}`;
   return {t:'Hemşireler',back:1,h};
 }
@@ -727,42 +870,56 @@ function svcRender(){
 
 /* ---------- Notlardan içe aktarma ---------- */
 let IM={text:'',items:null,cmp:null,pays:[]};
-const SERV_RX=/^(serum|kan\b|enj|i[ğg]ne\b|pansuman|sonda|lavman|nebul|tansiyon|şeker|ateş|aşı|ekg|ecg|oksijen|dikiş|sütür|damar)/i;
-const DATE_RX=/^(\d{1,2})\.(\d{1,2})\.(\d{4})\.?\s*(?:-\s*)?(?:(\d{1,2})[.:](\d{2}))?\s*(?:[✅✔✓]️?)?$/;
+// Hizmet satırı başlangıçları (küçük harfe çevrilmiş satırda aranır)
+const SERV_L=/^(serum|[iı]zotonik|ringer|dekstroz|[iı]zolen|kan\b|enj|[iı][ğg]ne\b|pansuman|sonda|lavman|nebul|tansiyon|şeker(?=\s|$)|ateş(?=\s|$)|aşı(?=\s|$)|ekg|ecg|oksijen|dikiş|sütür|damar|(?:eczane\s*)?[iı]la[çc](?=\s|$)|[iı]nhaler(?=\s|$))/;
+// Sadece ilaç ekleyen satırlar (hizmet sayılmaz): "İlaç", "Eczane İlaç", "İnhaler"
+const ITEM_L=/^(?:(?:eczane\s*)?[iı]la[çc]|[iı]nhaler)(?=\s|$)/;
+const SERUMNAME_L=/^(serum|[iı]zotonik|ringer|dekstroz|[iı]zolen)/;
+const isServ=L=>SERV_L.test(lc(L).replace(/^\s+/,''));
+const isItemLine=L=>ITEM_L.test(lc(L).replace(/^\s+/,''));
+// Tarih satırı: tarihten sonra ✅ ❌ ‼️ nokta veya rakamsız kısa not olabilir
+const DATE_RX=/^(\d{1,2})\.(\d{1,2})\.(\d{4})\.?\s*(?:-\s*)?(?:(\d{1,2})[.:](\d{2})(?!\d))?([^\d]*)$/;
 const PHONE_RX=/(?<!\d)0?5\d{2}[\s.-]?\d{3}[\s.-]?\d{2}[\s.-]?\d{2}(?!\d)/;
 const UC_RX=/al[ıiIİ]nan\s*[üuÜU]cret\s*[-:–]?\s*([\d.,]*\d)/i;
 const MAL_RX=/^mal[iıİI]yet\s*[-:–]?\s*([\d.,]*\d)/i;
+// Ziyaret altındaki maliyet / ücret / kâr satırı (tutar boş olabilir)
+const COST_RX=/^(mal[iıİI]yet|al[ıiIİ]nan\s*[üuÜU]cret|k[aâ]r)(?=\s*[-:–]|\s*\d|\s*₺|\s*$)\s*[-:–]?\s*([\d.,]*\d)?\s*(?:₺|tl)?\.?\s*(.*)$/i;
+// Maliyet satırındaki hemşire parantezi: (MUSTAFA BOZDOĞAN-700₺) veya (SEDA-300)
+const NURSE_PAR_RX=/\(\s*([A-Za-zÇĞİÖŞÜçğıöşü][A-Za-zÇĞİÖŞÜçğıöşü.' ]*?)\s*[-:–=]?\s*(\d[\d.,]*)\s*(?:₺|tl)?\s*\)/i;
 const STOP_RX=/^(toplam\b|g[iİıI]der\s+tablosu|genel\s+toplam)/i;
-const NOPAY_RX=/^(yak[ıi]t|akaryak[ıi]t|bak[ıi]m|ula[sş][ıi]m|eczane|avukat|kira|fatura|gider|toplam|k[aâ]r|maliyet|[üu]cret|al[ıi]nan|lab|laboratuvar|vergi|sgk|stopaj|di[ğg]er|tamir|servis|net|genel|ciro|tahsilat|mal[ıi]|ilac|ila[çc]|malzeme|depo|sar[fi]|brut|br[uü]t)\b/i;
-function classifyPay(L){
+const PERSONEL_RX=/^(personel|hem[sş]ire)\s*(gideri|giderleri|[öo]demeleri?)?\s*:?$/i;
+const NOPAY_RX=/^(yak[ıi]t|akaryak[ıi]t|bak[ıi]m|ula[sş][ıi]m|eczane|avukat|kira|fatura|gider|toplam|k[aâ]r|maliyet|[üu]cret|al[ıi]nan|lab|laboratuvar|vergi|sgk|stopaj|di[ğg]er|tamir|servis|net|genel|ciro|tahsilat|mal[ıi]|ilac|ila[çc]|malzeme|depo|sar[fi]|brut|br[uü]t|personel)\b/i;
+const INVIS_RX=/[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g;
+const capWords=s=>String(s||'').trim().split(/\s+/).map(cap).join(' ');
+function classifyPay(L,personel){
   const m=L.match(/^(.*?[A-Za-zÇĞİÖŞÜçğıöşü.])[\s:\-–=\t]+(\d[\d.,]*)\s*(?:tl|₺)?\.?$/i);
   if(!m)return null;
   const name=m[1].replace(/^h[eé]m[sş]ire\s*[:\-–]?\s*/i,'').replace(/[\s:\-–=]+$/,'').trim(),amt=num(m[2]);
   if(!name||amt<=0)return null;
   if(UC_RX.test(L)||MAL_RX.test(L))return null;
   if(/ultralab/i.test(fold(name)))return {tip:'lab',ad:'ULTRALAB',tutar:amt,known:true};
+  if(NOPAY_RX.test(name))return null;
   const k=nkey(name),nu=S.nurses.find(n=>nkey(n.ad)===k)||S.nurses.find(n=>{const a=nkey(n.ad).split(' '),b=k.split(' ');return b.length===1&&a.includes(b[0])||a.length===1&&b.includes(a[0]);});
   if(nu)return {tip:'hemsire',ad:nu.ad,tutar:amt,known:true};
-  if(NOPAY_RX.test(name))return null;
-  if(/^[A-Za-zÇĞİÖŞÜçğıöşü.'\s]+$/.test(name)&&name.split(/\s+/).length<=3)return {tip:'hemsire',ad:name.split(/\s+/).map(cap).join(' '),tutar:amt,known:false};
+  if(/^[A-Za-zÇĞİÖŞÜçğıöşü.'\s]+$/.test(name)&&name.split(/\s+/).length<=3)return {tip:'hemsire',ad:capWords(name),tutar:amt,known:!!personel};
   return null;
 }
 const cap=s=>s?s.charAt(0).toLocaleUpperCase('tr')+s.slice(1).toLocaleLowerCase('tr'):s;
 const tail10=t=>String(t||'').replace(/\D/g,'').slice(-10);
-const ALIAS={bemix:'Bemiks'};
+const ALIAS={bemix:'Bemiks',beniks:'Bemiks'};
 function splitName(n){
   n=String(n||'').replace(/([a-zçğıöşü])([A-ZÇĞİÖŞÜ])/g,'$1 $2').replace(/\s+/g,' ').trim();
   if(!n)return {ad:'',soyad:''};
-  const w=n.split(' ').filter(t=>/[A-Za-zÇĞİÖŞÜçğıöşü]/.test(t)&&!/^(?:t\.?c\.?|tckn)[-:.–=]*$/i.test(t)&&!/^d\.?t\.?[-:–=]+$/i.test(t));
+  const w=n.split(' ').map(t=>t.replace(/[.,;:]+$/,'')).filter(t=>/[A-Za-zÇĞİÖŞÜçğıöşü]/.test(t)&&!/^(?:t\.?c\.?|tckn)[-:.–=]*$/i.test(t)&&!/^d\.?t\.?[-:–=]+$/i.test(t));
   n=w.join(' ');
   if(!w.length)return {ad:'',soyad:''};
-  if(w.length===1||/^\(/.test(w[w.length-1]))return {ad:n,soyad:''};
+  if(w.length===1)return {ad:n,soyad:''};
   return {ad:w.slice(0,-1).join(' '),soyad:w[w.length-1]};
 }
 const META_RX=/^(?:d\.?\s?t\.?|do[ğg]um|t\.?\s?c\.?)\s*[:.\-]?\s*\d|^(?:ykn|y\.k\.n\.?|pn|pno|pasaport(?:\s*no)?)\s*[:.\-–=]?\s*[A-Za-z]?\d|^\d{11}$/i;
 const FID_RX=/(?:^|[\s(])(?:ykn|y\.k\.n\.?|yabanc[ıi]\s*kimlik(?:\s*(?:no|numaras[ıi]))?|pasaport(?:\s*(?:no|numaras[ıi]))?|pno|pn)\s*[:.\-–=]?\s*([A-Za-z]{0,2}\d[A-Za-z0-9]{4,14})(?![A-Za-z0-9])/i;
 function parsePerson(line){
-  let s=line.replace(/ /g,' '),tc='',tel='',dogum='';
+  let s=line.replace(/ /g,' '),tc='',tel='',dogum='';const par=[];
   s=s.replace(FID_RX,(m,d)=>{tc=d.toUpperCase();return ' ';});
   if(!tc)s=s.replace(/(?:t\.?\s?c\.?|tckn)\s*(?:kimlik)?\s*(?:no|numaras[ıi])?\s*[:.\-–=]?\s*(\d{11})/i,(m,d)=>{tc=d;return ' ';});
   s=s.replace(/(?:(?:d\.?\s?t\.?|do[ğg]um(?:\s*tarihi)?)\s*[:.\-]?\s*)?(?<!\d)(\d{1,2})[./-](\d{1,2})[./-](\d{4})(?!\d)/i,(m,d,mo,y)=>{
@@ -773,16 +930,22 @@ function parsePerson(line){
   s=s.replace(PHONE_RX,m=>{tel=m.replace(/\D/g,'');return ' ';});
   if(!tc)s=s.replace(/(?<!\d)[1-9]\d{10}(?!\d)/,m=>{tc=m;return ' ';});
   if(tel.length===10)tel='0'+tel;
+  // parantez içi (Akfen Holding), (Müdür) gibi açıklamalar isimden ayrılır, hasta notuna gider
+  s=s.replace(/\(([^)]*)\)/g,(m,t)=>{t=t.trim();if(t)par.push(t);return ' ';}).replace(/[()]/g,' ');
   s=s.replace(/(?:^|\s)(?:t\.?\s?c\.?(?:\s*(?:kimlik|no|kn))*|tckn)\s*[:.\-–=]*(?=\s|$)/gi,' ')
      .replace(/(?:^|\s)d\.?\s?t\.?\s*[:\-–=]+(?=\s|$)/gi,' ')
      .replace(/(?:^|\s)do[ğg]um(?:\s*tarihi)?\s*[:\-–=]*(?=\s|$)/gi,' ');
   s=s.replace(/\s+/g,' ').trim().replace(/^[-–.:=\s]+|[-–.:=\s]+$/g,'');
-  return Object.assign(splitName(s),{tel,tc,dogum});
+  // "Arzu Camgöz Hastası": tanıdığın yönlendirdiği, adı bilinmeyen hasta. Her biri ayrı hasta olur.
+  let ref='';
+  const rm=s.match(/^(.*\S)\s+hastas[ıi]$/i);
+  if(rm){ref=rm[1].trim();s='';}
+  return Object.assign(splitName(s),{tel,tc,dogum,par,ref});
 }
 function isPersonStart(L,nx){
   if(PHONE_RX.test(L))return true;
-  if(SERV_RX.test(L)||META_RX.test(L))return false;
-  return SERV_RX.test(nx)||META_RX.test(nx)||(PHONE_RX.test(nx)&&!parsePerson(nx).ad);
+  if(isServ(L)||META_RX.test(L)||COST_RX.test(L)||DATE_RX.test(L))return false;
+  return isServ(nx)||META_RX.test(nx)||(PHONE_RX.test(nx)&&!parsePerson(nx).ad);
 }
 function normDrug(n){
   n=n.replace(/[.,;:]+$/,'').replace(/\s+/g,' ').trim();
@@ -804,12 +967,13 @@ function parseItems(rest,serum){
   const items=[];
   parts.forEach(p=>{
     p=p.trim().replace(/\.+$/,'');if(!p)return;
-    let adet=1,name=p,m;
-    if((m=p.match(/^(.+?)\s*(\d+)\s*\/\s*(\d+)$/))){name=m[1];adet=round2(+m[2]/+m[3]);}
+    let adet=1,uyg=null,name=p,m;
+    // 1/2Arveles: yarım uygulandı ama ampulün kalanı çöpe gider, depodan/maliyetten tam düşer
+    if((m=p.match(/^(\d+)\s*\/\s*(\d+)\s*([A-Za-zÇĞİÖŞÜçğıöşü].*)$/))&&+m[2]>0){name=m[3];uyg=round2(+m[1]/+m[2]);adet=Math.max(1,Math.ceil(uyg-1e-9));}
+    else if((m=p.match(/^(.+?)\s*(\d+)\s*\/\s*(\d+)$/))&&+m[3]>0){name=m[1];uyg=round2(+m[2]/+m[3]);adet=Math.max(1,Math.ceil(uyg-1e-9));}
     else if((m=p.match(/^(.+?)\s*[x×]\s*(\d+)$/i))){name=m[1];adet=+m[2];}
     name=normDrug(name);if(!name)return;
-    const ex=items.find(i=>lc(i.ad)===lc(name));
-    if(ex)ex.adet=round2(ex.adet+adet);else items.push({ad:name,adet});
+    addDoz(items,name,adet,uyg);
   });
   return items;
 }
@@ -817,107 +981,139 @@ function parseService(L){
   let name,rest;
   const ti=L.indexOf('\t');
   if(ti>0){name=L.slice(0,ti).trim();rest=L.slice(ti+1).trim();}
-  else{const m=L.match(/^(serum(?:\s*x\s*\d+)?(?:\s*\([^)]*\))?|kan\s*alma|\S+)\s*(.*)$/i);name=m[1];rest=m[2];}
-  const serum=/^serum/i.test(name);
+  else{const m=L.match(/^((?:serum|[iİı]zotonik|ringer|dekstroz)(?:\s*\d+\s*(?:cc|ml))?(?:\s*x\s*\d+)?(?:\s*\([^)]*\))?|kan\s*alma|damar\s*yolu(?:\s*a[çc]ma)?|\S+)\s*(.*)$/i);name=m[1];rest=m[2];}
+  const ln=lc(name);
+  const serum=SERUMNAME_L.test(ln);
   if(serum&&!/(?:cc|ml)\b/i.test(name)){const mm=rest.match(/^(\d+)\s*(?:cc|ml)\b\s*(.*)$/i);if(mm){name+=' '+mm[1]+' cc';rest=mm[2];}}
-  let count=1;const cm=name.match(/x\s*(\d+)/i);if(serum&&cm)count=+cm[1];
+  let count=1;const cm=lc(name).match(/x\s*(\d+)/);if(serum&&cm)count=+cm[1];
   const pm=name.match(/\(([^)]*)\)/);
-  const base=serum?'Serum':/^kan\s*alma/i.test(name)?'Kan alma':cap(name.replace(/\([^)]*\)/g,'').replace(/x\s*\d+/i,'').trim());
+  const kind=serum&&!/^serum/.test(ln)?cap(ln.match(SERUMNAME_L)[1].replace(/^ı/,'i'))+' ':'';
+  const base=serum?'Serum':/^kan\s*alma/.test(ln)?'Kan alma':/^damar/.test(ln)?'Damar yolu açma':cap(name.replace(/\([^)]*\)/g,'').replace(/x\s*\d+/i,'').trim());
   const sz=name.match(/(\d+)\s*(?:cc|ml)\b/i);
-  return {base,count,size:sz?sz[1]+' cc':'',note:pm?pm[1].trim():'',items:parseItems(rest,serum)};
+  return {base,count,size:kind+(sz?sz[1]+' cc':''),note:pm?pm[1].trim():'',items:parseItems(rest,serum)};
+}
+function parseItemLine(L){
+  const ti=L.indexOf('\t');
+  const rest=ti>0?L.slice(ti+1):L.replace(/^\s*(?:eczane\s*)?(?:[iİı]la[çc]|[iİı]nhaler)\s*[:\-–]?\s*/i,'');
+  return {base:'',count:1,size:'',note:'',items:parseItems(rest.trim(),false)};
 }
 function mergeSvc(list){
   if(!list.length)return {base:'',count:1,note:'',items:[],list:[],names:[]};
-  const items=[],names=[],notes=[];
+  const items=[],nm={},order=[],notes=[];
   list.forEach(sv=>{
-    const nm=sv.base+(sv.size?' '+sv.size:'')+(sv.count>1?' ×'+sv.count:'');
-    if(sv.base&&!names.includes(nm))names.push(nm);
+    if(sv.base){const k=sv.base+(sv.size?' '+sv.size:'');if(!(k in nm)){nm[k]=0;order.push(k);}nm[k]+=sv.count;}
     if(sv.note)notes.push(sv.note);
-    sv.items.forEach(it=>{const ex=items.find(i=>lc(i.ad)===lc(it.ad));if(ex)ex.adet=round2(ex.adet+it.adet);else items.push({ad:it.ad,adet:it.adet});});
+    sv.items.forEach(it=>addDoz(items,it.ad,it.adet,it.uyg));
   });
-  return {base:list[0].base,count:list[0].count,note:notes.join('; '),items,list,names};
+  const names=order.map(k=>k+(nm[k]>1?' ×'+nm[k]:''));
+  const first=list.find(s=>s.base)||list[0];
+  return {base:first.base,count:first.count,note:notes.join('; '),items,list:list.filter(s=>s.base),names};
 }
 function costLine(L){
-  let m;
-  if((m=L.match(MAL_RX)))return {k:'m',v:num(m[1])};
-  if((m=L.match(/^al[ıiIİ]nan\s*[üuÜU]cret\s*[-:–]?\s*([\d.,]*\d)/i)))return {k:'u',v:num(m[1])};
-  if((m=L.match(/^k[aâ]r\s*[-:–]\s*([\d.,]*\d)/i)))return {k:'kar',v:num(m[1])};
-  return null;
+  const m=L.match(COST_RX);if(!m)return null;
+  const key=fold(m[1]);
+  const k=key.startsWith('mal')?'m':key.startsWith('al')?'u':'kar';
+  const r={k,v:m[2]!=null?num(m[2]):null};
+  if(k==='m'){const p=(m[3]||'').match(NURSE_PAR_RX);if(p)r.nurse={ad:p[1].trim(),tutar:num(p[2])};}
+  return r;
 }
 const fold=s=>lc(s).replace(/ç/g,'c').replace(/ğ/g,'g').replace(/ı/g,'i').replace(/ö/g,'o').replace(/ş/g,'s').replace(/ü/g,'u');
 const nkey=s=>fold(s).replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(Boolean).sort().join(' ');
+// Aynı hasta: önce TC, sonra isim. Telefon sadece isimsiz kayıtta kullanılır (aileler aynı telefonu paylaşıyor).
 function matchPatient(x){
-  const t=tail10(x.tel),nm=nkey((x.ad||'')+' '+(x.soyad||''));
-  return S.patients.find(p=>t&&tail10(p.tel)===t)||S.patients.find(p=>x.tc&&p.tc===x.tc)||S.patients.find(p=>nm&&nkey(pname(p))===nm)||null;
+  if(x.ref){const full=((x.ad||'')+' '+(x.soyad||'')).trim();return S.patients.find(p=>pname(p)===full)||null;}
+  if(x.tc){const p=S.patients.find(p=>p.tc&&p.tc===x.tc);if(p)return p;}
+  if(!x.anon){
+    const nm=nkey((x.ad||'')+' '+(x.soyad||''));
+    if(nm){const p=S.patients.find(p=>nkey(pname(p))===nm&&!(x.tc&&p.tc&&p.tc!==x.tc));if(p)return p;}
+    return null;
+  }
+  const t=tail10(x.tel);
+  return t?S.patients.find(p=>tail10(p.tel)===t)||null:null;
+}
+const patKeys=x=>x.ref?[]:[x.tc?'tc:'+x.tc:'',!x.anon?'n:'+nkey(x.ad+' '+x.soyad):(tail10(x.tel)?'t:'+tail10(x.tel):'')].filter(k=>k&&k!=='n:');
+// Hemşire adını tam ada çevir: "SEDA" -> "Seda Yılmaz" (Personel Gideri listesinden veya kayıtlı hemşirelerden)
+function resolveNurse(name,cands){
+  const k=nkey(name),toks=k.split(' ');
+  const all=[...S.nurses.map(n=>n.ad),...cands];
+  const ex=all.find(c=>nkey(c)===k);if(ex)return ex;
+  const part=all.filter(c=>{const ck=nkey(c).split(' ');return toks.every(t=>ck.includes(t));}).sort((a,b)=>b.length-a.length);
+  return part[0]||capWords(name);
 }
 function parseNotes(text){
-  const lines=text.replace(/\r/g,'').replace(/ /g,' ').split('\n').map(l=>l.trim()).filter(Boolean);
-  const groups=[];let g=null,ses=null,per=null,skip=false,sec=null,anon=0;
+  const lines=text.replace(/\r/g,'').replace(/ /g,' ').replace(INVIS_RX,'').split('\n').map(l=>l.trim()).filter(Boolean);
+  const groups=[];let g=null,ses=null,per=null,skip=false,sec=null,personel=false;
   const totals={u:0,m:0,found:false};const pays=[];let lastD=null;
   const flush=()=>{if(sec){totals.u+=sec.u||0;totals.m+=sec.m||0;totals.found=true;sec=null;}};
-  const newG=()=>{g={sessions:[],costs:{},closed:false};groups.push(g);ses=null;per=null;};
+  const newG=()=>{g={sessions:[],costs:{},seen:{},closed:false};groups.push(g);ses=null;per=null;};
   for(let i=0;i<lines.length;i++){
     const L=lines[i],nx=lines[i+1]||'';
     const dm=L.match(DATE_RX);
     if(skip){
       if(!dm){
         let x;
+        if(PERSONEL_RX.test(L)){personel=true;continue;}
         if(sec.u==null&&(x=L.match(UC_RX)))sec.u=num(x[1]);
         if(sec.m==null&&(x=L.match(MAL_RX)))sec.m=num(x[1]);
-        const py=classifyPay(L);
+        const py=classifyPay(L,personel);
         if(py){const ld=lastD||(()=>{const t=new Date();return {y:t.getFullYear(),m:t.getMonth()+1};})();py.tarih=ymd(new Date(ld.y,ld.m,0));py.raw=L;pays.push(py);}
         continue;
       }
-      flush();skip=false;
-    }else if(STOP_RX.test(L)){skip=true;sec={u:null,m:null};g=null;ses=null;per=null;continue;}
+      flush();skip=false;personel=false;
+    }else if(STOP_RX.test(L)){skip=true;personel=false;sec={u:null,m:null};g=null;ses=null;per=null;continue;}
     if(dm&&per&&!per.svc&&!per.dogum&&+dm[3]<2005){per.dogum=ymd(new Date(+dm[3],+dm[2]-1,+dm[1]));continue;}
     if(dm){
       if(!g||g.closed)newG();
-      const d={d:+dm[1],m:+dm[2],y:+dm[3],t:dm[4]!=null?pad(+dm[4])+':'+dm[5]:''};
+      const note=(dm[6]||'').replace(/[^\p{L}\s]/gu,' ').replace(/\s+/g,' ').trim();
+      const d={d:+dm[1],m:+dm[2],y:+dm[3],t:dm[4]!=null?pad(+dm[4])+':'+dm[5]:'',note:note.length>=2?note:''};
       if(d.m>=1&&d.m<=12&&d.y>=2000&&d.y<=2100)lastD={y:d.y,m:d.m};
       if(!ses||ses.persons.length){ses={dates:[],persons:[]};g.sessions.push(ses);}
       ses.dates.push(d);per=null;continue;
     }
     const mc=costLine(L);
-    if(mc){if(!g)newG();g.costs[mc.k]=mc.v;g.closed=true;per=null;continue;}
+    if(mc){if(!g)newG();if(mc.v!=null)g.costs[mc.k]=mc.v;g.seen[mc.k]=true;if(mc.nurse)g.nurse=mc.nurse;g.closed=true;per=null;continue;}
     if(per&&!per.svc&&META_RX.test(L)){
       const pp=parsePerson(L);['tel','tc','dogum'].forEach(k=>{if(pp[k]&&!per[k])per[k]=pp[k];});per.raw.push(L);continue;
     }
-    if(per&&!per.svc&&per.ad&&per.addr.length===0&&!PHONE_RX.test(L)&&!SERV_RX.test(L)&&!META_RX.test(L)&&SERV_RX.test(nx)){per.raw.push(L);per.addr.push(L);continue;}
+    if(per&&!per.svc&&(per.ad||per.ref)&&per.addr.length===0&&!PHONE_RX.test(L)&&!isServ(L)&&!META_RX.test(L)&&isServ(nx)){per.raw.push(L);per.addr.push(L);continue;}
     if(isPersonStart(L,nx)){
       const pp=parsePerson(L);
-      if(!pp.ad&&per&&!per.svc){['tel','tc','dogum'].forEach(k=>{if(pp[k]&&!per[k])per[k]=pp[k];});per.raw.push(L);continue;}
+      if(!pp.ad&&!pp.ref&&per&&!per.svc){['tel','tc','dogum'].forEach(k=>{if(pp[k]&&!per[k])per[k]=pp[k];});per.raw.push(L);continue;}
       if(!g||g.closed)newG();
       if(!ses){ses={dates:[],persons:[]};g.sessions.push(ses);}
-      per=Object.assign(pp,{svc:null,addr:[],raw:[L]});
+      per=Object.assign(pp,{svc:null,svcs:[],addr:[],raw:[L]});
       ses.persons.push(per);continue;
     }
-    if(!per&&SERV_RX.test(L)){
+    if(!per&&isServ(L)){
       if(!g||g.closed)newG();
       if(!ses){ses={dates:[],persons:[]};g.sessions.push(ses);}
-      per={ad:'',soyad:'',tel:'',tc:'',dogum:'',svc:null,addr:[],raw:[]};
+      per={ad:'',soyad:'',tel:'',tc:'',dogum:'',par:[],ref:'',svc:null,svcs:[],addr:[],raw:[]};
       ses.persons.push(per);
     }
     if(per){
       per.raw.push(L);
-      if(!per.svc){
-        if(!SERV_RX.test(L)&&SERV_RX.test(nx)){per.addr.push(L);}
-        else{per.svc=parseService(L);per.svcs=[per.svc];}
+      if(isItemLine(L)){const it=parseItemLine(L);if(!per.svc)per.svc=it;per.svcs.push(it);}
+      else if(!per.svc){
+        if(!isServ(L)&&isServ(nx)){per.addr.push(L);}
+        else{per.svc=parseService(L);per.svcs.push(per.svc);}
       }
-      else if(SERV_RX.test(L))per.svcs.push(parseService(L));
+      else if(isServ(L))per.svcs.push(parseService(L));
       else per.addr.push(L);
       continue;}
   }
   flush();
-  const out=[];
+  const out=[];const refN={};
+  const payNames=pays.filter(y=>y.tip==='hemsire').map(y=>y.ad);
+  const parNames=groups.filter(gr=>gr.nurse).map(gr=>gr.nurse.ad).filter(n=>n.trim().split(/\s+/).length>1).map(capWords);
   groups.forEach(gr=>{
     const vs=[];
     gr.sessions.forEach(s=>{const dates=s.dates.length?s.dates:[null];s.persons.forEach(p=>dates.forEach(d=>vs.push({d,p})));});
     const N=vs.length;if(!N)return;
-    const U=gr.costs.u,M=gr.costs.m;
+    const U=gr.costs.u,M=gr.costs.m,K=gr.costs.kar;
     const share=(T,i)=>T==null?0:(i<N-1?round2(T/N):round2(T-round2(T/N)*(N-1)));
+    const nurseAd=gr.nurse?resolveNurse(gr.nurse.ad,[...payNames,...parNames]):'';
     vs.forEach((e,i)=>{
-      const d=e.d,p=e.p,sv=mergeSvc(p.svcs||(p.svc?[p.svc]:[]));
+      const d=e.d,p=e.p,sv=mergeSvc(p.svcs.length?p.svcs:(p.svc?[p.svc]:[]));
       const w=[],n=[];let tarih='',saat='';
       if(!d)w.push({k:'t',m:'Tarih yok'});
       else{
@@ -925,39 +1121,66 @@ function parseNotes(text){
         if(dt.getFullYear()===d.y&&dt.getMonth()===d.m-1&&dt.getDate()===d.d){tarih=ymd(dt);saat=d.t;}
         else w.push({k:'t',m:'Tarih geçersiz ('+d.d+'.'+d.m+'.'+d.y+')'});
       }
-      let ad=p.ad,soyad=p.soyad;
-      if(!ad){ad='İsimsiz';soyad='Kayıt '+(tarih?fd(tarih):'tarihsiz')+' #'+(++anon);n.push('İsim okunamadı, geçici ad verildi. Hasta kartından düzeltebilirsin');}
+      let ad=p.ad,soyad=p.soyad,anon=false,ref='';
+      if(p.ref){
+        ref=capWords(p.ref);refN[nkey(ref)]=(refN[nkey(ref)]||0)+1;
+        ad=ref+' hastası';soyad=(tarih?fd(tarih):'tarihsiz')+' #'+refN[nkey(ref)];
+        n.push('Yönlendirilen hasta, ayrı hasta olarak açılır. Adını hasta kartından düzeltebilirsin');
+      }else if(!ad){anon=true;ad='İsimsiz';soyad='Kayıt '+(tarih?fd(tarih):'tarihsiz')+' #'+(out.filter(o=>o.anon).length+1);n.push('İsim okunamadı, geçici ad verildi. Hasta kartından düzeltebilirsin');}
       if(p.tc&&/^[1-8]\d{10}$/.test(p.tc)&&!validTC(p.tc))n.push('TC geçersiz görünüyor');
-      if(U==null)n.push('Ücret yazılmamış');
+      if(U==null)n.push('Ücret yazılmamış, alınamadı (0) sayıldı');
+      if(M==null&&!gr.seen.m)n.push('Maliyet yazılmamış');
       if(N>1)n.push('Ücret ve maliyet '+N+' ziyarete bölündü');
       if(!sv.base)n.push('Hizmet satırı yok');
+      if(K!=null&&U!=null&&M!=null&&Math.abs(U-M-K)>=1)n.push('Defterdeki kâr ('+money(K)+') ücret − maliyet ile tutmuyor');
       const items=sv.items.map(it=>{
         const st=S.stock.find(s=>lc(s.ad)===lc(it.ad))||S.stock.find(s=>lc(s.ad).startsWith(lc(it.ad)));
-        return {id:st?st.id:'x'+uid(),ad:st?st.ad:it.ad,tip:st?st.tip:'ilac',adet:it.adet,birim:0};
+        const o={id:st?st.id:'x'+uid(),ad:st?st.ad:it.ad,tip:st?st.tip:'ilac',adet:it.adet,birim:0};
+        if(it.uyg!=null)o.uyg=it.uyg;
+        return o;
       });
       const hz=[],svcN={};
       (sv.list||[]).forEach(b=>{
-        const sx=b.base==='Serum'?S.services.find(s=>s.tip==='serum'):S.services.find(s=>lc(s.ad)===lc(b.base))||S.services.find(s=>lc(s.ad).startsWith(lc(b.base)));
+        const fb=fold(b.base);
+        const sx=b.base==='Serum'?S.services.find(s=>s.tip==='serum'):S.services.find(s=>fold(s.ad)===fb)||S.services.find(s=>fold(s.ad).startsWith(fb))||(fb.startsWith('damar')?S.services.find(s=>fold(s.ad).startsWith('damar')):null);
         if(sx){if(!hz.includes(sx.id))hz.push(sx.id);svcN[sx.id]=(svcN[sx.id]||0)+b.count;}
       });
-      out.push({include:false,w,n,tarih,saat,ad,soyad,raw:p.ad?'':(p.raw||[]).join(' | '),tel:p.tel,tc:p.tc,dogum:p.dogum||'',adres:p.addr.join(' '),
-        hizmetler:hz,svcN,hizmetAd:sv.names||[],items,sikayet:sv.note,
-        ucret:share(U,i),maliyet:share(M,i),mark:''});
+      const pnot=[...(p.par||[]).map(t=>'Defterde: ('+t+')'),ref?'Yönlendiren: '+ref:''].filter(Boolean).join(' · ');
+      out.push({include:false,w,n,fix:[],tarih,saat,ad,soyad,anon,ref:!!ref,raw:(p.ad||p.ref)?'':(p.raw||[]).join(' | '),tel:p.tel,tc:p.tc,dogum:p.dogum||'',adres:p.addr.join(' '),pnot,
+        hizmetler:hz,svcN,hizmetAd:sv.names||[],items,sikayet:sv.note,dnot:d&&d.note?d.note:'',
+        ucret:share(U,i),maliyet:share(M,i),kimAd:nurseAd,hemsireUcret:gr.nurse?share(gr.nurse.tutar,i):0,mark:''});
     });
   });
-  // komşu tarihlerle tutarsız olanları işaretle
-  const ym=x=>x.tarih?(+x.tarih.slice(0,4))*12+(+x.tarih.slice(5,7)):null;
+  // tarih yazım hatası kontrolü (komşu kayıtlara göre)
+  const ym0=out.map(x=>x.tarih?(+x.tarih.slice(0,4))*12+(+x.tarih.slice(5,7)-1):null);
+  const ymTxt=v=>pad(v%12+1)+'.'+Math.floor(v/12);
   out.forEach((x,i)=>{
-    const a=ym(x);if(a==null)return;
+    const a=ym0[i];if(a==null)return;
     const nb=[];
-    for(let j=Math.max(0,i-4);j<=Math.min(out.length-1,i+4);j++){if(j!==i){const b=ym(out[j]);if(b!=null)nb.push(b);}}
+    for(let j=Math.max(0,i-8);j<=Math.min(out.length-1,i+8);j++){if(j!==i&&ym0[j]!=null)nb.push(ym0[j]);}
+    if(nb.length<3)return;
+    const cnt={};nb.forEach(b=>cnt[b]=(cnt[b]||0)+1);
+    const mode=+Object.keys(cnt).sort((p,q)=>cnt[q]-cnt[p])[0];
+    const diff=a-mode;
+    if(diff!==0&&diff%12===0&&cnt[mode]>=nb.length/2){
+      const yOld=+x.tarih.slice(0,4),yNew=yOld-diff/12;
+      x.tarih=yNew+x.tarih.slice(4);
+      x.fix.push('Yıl defterde '+yOld+' yazılmış, '+yNew+' olarak düzeltildi');
+      if(x.anon)x.soyad=x.soyad.replace(/\d{2}\.\d{2}\.\d{4}/,fd(x.tarih));
+      if(x.ref)x.soyad=x.soyad.replace(/\d{2}\.\d{2}\.\d{4}/,fd(x.tarih));
+      return;
+    }
     const near=nb.filter(b=>Math.abs(a-b)<=2).length;
-    if(nb.length>=3&&near<nb.length/2)x.w.push({k:'t',m:'Tarih komşu kayıtlardan çok farklı, kontrol et'});
+    if(near<nb.length/2){x.w.push({k:'t',m:'Tarih komşu kayıtlardan çok farklı, kontrol et'});return;}
+    let pv=null,nv=null;
+    for(let j=i-1;j>=0;j--)if(ym0[j]!=null){pv=ym0[j];break;}
+    for(let j=i+1;j<out.length;j++)if(ym0[j]!=null){nv=ym0[j];break;}
+    if(pv!=null&&pv===nv&&pv!==a)x.w.push({k:'t',m:'Önceki ve sonraki kayıtlar '+ymTxt(pv)+', bu kayıt '+ymTxt(a)+'. Yazım hatası olabilir, kontrol et'});
   });
   // hasta eşleştirme ve tekrar kontrolü
   const seen=new Set(),usedDup=new Set();
   out.forEach(x=>{
-    const ex=matchPatient(x),keys=[tail10(x.tel),nkey(x.ad+' '+x.soyad)].filter(Boolean);
+    const ex=matchPatient(x),keys=patKeys(x);
     x.mark=ex?'mevcut hasta':(keys.some(k=>seen.has(k))?'bu aktarımda':'yeni hasta');
     keys.forEach(k=>seen.add(k));
     if(ex&&x.tarih){
@@ -969,9 +1192,19 @@ function parseNotes(text){
   const gotU=round2(out.reduce((a,x)=>a+x.ucret,0)),gotM=round2(out.reduce((a,x)=>a+x.maliyet,0));
   const cmp=totals.found?{fileU:totals.u,fileM:totals.m,gotU,gotM,ok:Math.abs(totals.u-gotU)<1&&Math.abs(totals.m-gotM)<1}:null;
   pays.forEach(y=>{
-    y.include=y.known&&!S.extPay.some(e=>e.tip===y.tip&&e.ad===y.ad&&e.tarih.slice(0,7)===y.tarih.slice(0,7)&&Math.abs(num(e.tutar)-y.tutar)<0.01);
     y.dahil=true;
-    y.note=!y.known?'İsim tanınmadı: hemşire ise işaretle':(y.include?'':'Aynı ödeme zaten kayıtlı');
+    if(y.tip==='hemsire'){
+      const k=nkey(y.ad),mo=y.tarih.slice(0,7);
+      const fromV=round2(out.filter(x=>x.kimAd&&nkey(x.kimAd)===k&&x.tarih&&x.tarih.slice(0,7)===mo).reduce((a,x)=>a+x.hemsireUcret,0));
+      if(fromV>0){
+        y.include=false;
+        y.note=Math.abs(fromV-y.tutar)<1?'Ziyaretlerde hemşire ücreti olarak zaten var, ayrıca eklenmesine gerek yok':'Ziyaretlerdeki hemşire ücreti '+money(fromV)+', burada '+money(y.tutar)+'. Farkı kontrol et';
+        return;
+      }
+    }
+    const dup=S.extPay.some(e=>e.tip===y.tip&&e.ad===y.ad&&e.tarih.slice(0,7)===y.tarih.slice(0,7)&&Math.abs(num(e.tutar)-y.tutar)<0.01);
+    y.include=y.known&&!dup;
+    y.note=!y.known?'İsim tanınmadı: hemşire ise işaretle':(dup?'Aynı ödeme zaten kayıtlı':'');
   });
   return {items:out,cmp,pays};
 }
@@ -980,7 +1213,7 @@ function pImport(){
     return {t:'Notlardan içe aktar',back:1,h:`<div class="note">Not defterindeki bir ayın (veya birkaç ayın) metnini kopyalayıp aşağıya yapıştır. <b>Metin telefondan çıkmaz.</b> Kaydetmeden önce her kaydı görüp onaylayacaksın.</div>
     <textarea id="im_text" rows="12" placeholder="Metni buraya yapıştır..." style="font-size:14px">${esc(IM.text)}</textarea>
     <button class="btn full" style="margin-top:10px" data-act="imp-parse">Ayrıştır ve önizle</button>
-    <div class="note">Önce tek bir ay dene. Eski ziyaretler depodan düşmez, maliyetleri defterdeki gibi aynen alınır. Aynı kişi telefon veya isimden eşleşir. Aynı tarihte birkaç kişi veya çok günlü kürler için tek yazılan ücret ve maliyet ziyaretlere eşit bölünür.</div>`};
+    <div class="note">Önce tek bir ay dene. Eski ziyaretler depodan düşmez, maliyetleri defterdeki gibi aynen alınır. Aynı kişi TC veya isimden eşleşir (aynı telefonu paylaşan aile bireyleri ayrı hasta olur). Aynı tarihte birkaç kişi veya çok günlü kürler için tek yazılan ücret ve maliyet ziyaretlere eşit bölünür. Maliyetteki parantez, örneğin (Ayşe Kaya-700₺), o ziyarete hemşirenin gittiğini ve ona verilen ücreti gösterir.</div>`};
   }
   const it=IM.items,sel=it.filter(x=>x.include);
   const su=sel.reduce((a,x)=>a+num(x.ucret),0),sm=sel.reduce((a,x)=>a+num(x.maliyet),0);
@@ -990,7 +1223,7 @@ function pImport(){
   h+=`<div class="card sum"><b>${it.length}</b> ziyaret bulundu, <b>${sel.length}</b> seçili.<table class="tb" style="margin-top:6px"><tr><td>Seçili ücret</td><td class="r">${money(su)}</td></tr><tr><td>Seçili maliyet</td><td class="r">${money(sm)}</td></tr><tr class="tot"><td>Kâr</td><td class="r">${money(su-sm)}</td></tr><tr><td>Yeni açılacak hasta</td><td class="r">${np}</td></tr></table></div>`;
   if((IM.pays||[]).length)h+=`<div class="card"><b>Ayın sonundaki ödemeler</b><div class="muted">İşaretlediklerin Hemşireler / Laboratuvar sayfasındaki geçmiş ödemelere eklenir. Maliyetler ziyaretlerde zaten olduğu için ayrıca düşülmez. Tarihi düzeltmek için satıra dokun.</div>${IM.pays.map((y,i)=>`<div class="item" style="margin-top:8px"><input type="checkbox" data-act="imp-ptog" data-i="${i}" ${y.include?'checked':''}><div class="grow" data-act="imp-pedit" data-i="${i}"><b>${esc(y.ad)}</b> <span class="badge">${y.tip==='lab'?'laboratuvar':'hemşire'}</span><div class="muted">${fd(y.tarih)} · ${money(y.tutar)}</div>${y.note?`<span class="badge red">${esc(y.note)}</span>`:''}</div></div>`).join('')}</div>`;
   h+=`<div class="row" style="margin-bottom:10px"><button class="btn sm gray" data-act="imp-sel" data-m="ok">Uyarısızları seç</button><button class="btn sm gray" data-act="imp-sel" data-m="none">Hiçbirini seçme</button></div>`;
-  h+=it.map((x,i)=>`<div class="card ${x.w.length?'alert':''}"><div class="item"><input type="checkbox" data-act="imp-toggle" data-i="${i}" ${x.include?'checked':''}><div class="grow" data-act="imp-edit" data-i="${i}"><b>${esc((x.ad+' '+x.soyad).trim()||'(isimsiz)')}</b> <span class="badge ${x.mark==='mevcut hasta'?'grn':''}">${esc(x.mark)}</span><div class="muted">${x.tarih?fd(x.tarih):'tarih yok'} ${esc(x.saat)} · ${esc(x.hizmetAd.join(', ')||'—')}</div>${x.items.length?`<div class="muted">💊 ${x.items.map(a=>esc(a.ad)+(a.adet!==1?' ×'+a.adet:'')).join(', ')}</div>`:''}<div class="muted">Ücret ${money(x.ucret)} · Maliyet ${money(x.maliyet)}</div>${x.raw?`<div class="muted">Defterde: ${esc(x.raw.slice(0,160))}</div>`:''}${x.w.map(a=>`<span class="badge red">${esc(a.m)}</span>`).join('')}${x.n.map(a=>`<span class="badge">${esc(a)}</span>`).join('')}</div></div></div>`).join('');
+  h+=it.map((x,i)=>`<div class="card ${x.w.length?'alert':''}"><div class="item"><input type="checkbox" data-act="imp-toggle" data-i="${i}" ${x.include?'checked':''}><div class="grow" data-act="imp-edit" data-i="${i}"><b>${esc((x.ad+' '+x.soyad).trim()||'(isimsiz)')}</b> <span class="badge ${x.mark==='mevcut hasta'?'grn':''}">${esc(x.mark)}</span><div class="muted">${x.tarih?fd(x.tarih):'tarih yok'} ${esc(x.saat)} · ${esc(x.hizmetAd.join(', ')||'—')}</div>${x.items.length?`<div class="muted">💊 ${x.items.map(itemTxt).join(', ')}</div>`:''}<div class="muted">Ücret ${money(x.ucret)} · Maliyet ${money(x.maliyet)}</div>${x.kimAd?`<div class="muted">👩‍⚕️ ${esc(x.kimAd)} gitti · hemşireye ${money(x.hemsireUcret)} (maliyetin içinde)</div>`:''}${x.dnot?`<div class="muted">Not: ${esc(x.dnot)}</div>`:''}${x.raw?`<div class="muted">Defterde: ${esc(x.raw.slice(0,160))}</div>`:''}${x.w.map(a=>`<span class="badge red">${esc(a.m)}</span>`).join('')}${(x.fix||[]).map(a=>`<span class="badge org">${esc(a)}</span>`).join('')}${x.n.map(a=>`<span class="badge">${esc(a)}</span>`).join('')}</div></div></div>`).join('');
   h+=`<div class="row" style="position:sticky;bottom:calc(76px + env(safe-area-inset-bottom));margin-top:10px"><button class="btn gray" data-act="imp-reset">Baştan</button><button class="btn" data-act="imp-save">Seçilenleri kaydet (${sel.length})</button></div>`;
   return {t:'Önizleme',back:1,h};
 }
@@ -1083,7 +1316,7 @@ const A={
   visitNew:d=>{H.push(R);V=newV(d.id);R={page:'visit'};render();},
   visitEdit:d=>{
     const v=S.visits.find(x=>x.id===d.id);if(!v)return;
-    V=JSON.parse(JSON.stringify(v));V.ucretAuto=false;V.odenenAuto=false;
+    V=JSON.parse(JSON.stringify(v));V.ucretAuto=false;V.odenenAuto=false;VQ='';V.tests=V.tests||[];
     ['ucret','odenen','hemsireUcret','hizmetBedeli','maliyet'].forEach(k=>{V[k]=V[k]?ns(V[k]):'';});
     V.svcN=V.svcN||{};V.elle=!!V.elle&&!V.eski;V.kontrol=V.kontrol||'';V.sikayet=V.sikayet||'';V.olcum=V.olcum||'';V.not=V.not||'';
     H.push(R);R={page:'visit'};render();
@@ -1104,11 +1337,60 @@ const A={
     if(i>=0)V.items.splice(i,1);else{const st=S.stock.find(x=>x.id===d.id);V.items.push({id:st.id,ad:st.ad,tip:st.tip,adet:1,birim:num(st.birim)});}
     render(true);
   },
-  'v-step':d=>{const it=V.items.find(x=>x.id===d.id);it.adet+=+d.d;if(it.adet<=0)V.items=V.items.filter(x=>x!==it);render(true);},
+  'v-step':d=>{const it=V.items.find(x=>x.id===d.id);const f=dozFrac(it);it.adet+=+d.d;if(f!=null)it.uyg=round2(it.adet-1+f);if(it.adet<=0)V.items=V.items.filter(x=>x!==it);render(true);},
+  'v-doz':d=>{
+    const it=V.items.find(x=>x.id===d.id);if(!it)return;
+    const seq=[null,0.5,0.25,0.75],f=dozFrac(it),nx=seq[(seq.indexOf(f)+1)%seq.length];
+    if(nx==null)delete it.uyg;else it.uyg=round2(Math.max(1,it.adet)-1+nx);
+    render(true);
+  },
   'v-test':d=>{
     const i=V.tests.findIndex(x=>x.id===d.id);
-    if(i>=0)V.tests.splice(i,1);else{const t=S.tests.find(x=>x.id===d.id);V.tests.push({id:t.id,ad:t.ad,maliyet:num(t.maliyet),satis:num(t.satis)});}
+    if(i>=0)V.tests.splice(i,1);else{const t=S.tests.find(x=>x.id===d.id);if(t)V.tests.push(testSnap(t));}
     render(true);
+  },
+  'v-grp':d=>{
+    const g=S.testGroups.find(x=>x.id===d.id);if(!g)return;
+    const ts=grpTests(g),all=ts.length>0&&ts.every(t=>V.tests.some(x=>x.id===t.id));
+    if(all)V.tests=V.tests.filter(x=>!ts.some(t=>t.id===x.id));
+    else ts.forEach(t=>{if(!V.tests.some(x=>x.id===t.id))V.tests.push(testSnap(t));});
+    render(true);
+  },
+  // laboratuvar: gruplar, çarpanlar, Excel
+  grpNew:()=>{GD={ad:'',tests:[],q:''};grpRender();},
+  grpEdit:d=>{const g=S.testGroups.find(x=>x.id===d.id);if(!g)return;GD={id:g.id,ad:g.ad,tests:g.tests.slice(),q:''};grpRender();},
+  'gd-tog':d=>{gdSync();const i=GD.tests.indexOf(d.id);if(i>=0)GD.tests.splice(i,1);else GD.tests.push(d.id);grpRender();},
+  'gd-rm':d=>{gdSync();GD.tests=GD.tests.filter(id=>id!==d.id);grpRender();},
+  'gd-save':()=>{
+    gdSync();if(!GD.ad.trim()){toast('Grup adı yaz');return;}
+    if(!GD.tests.length){toast('En az bir test ekle');return;}
+    const o={ad:GD.ad.trim(),tests:GD.tests.slice()};
+    if(GD.id)Object.assign(S.testGroups.find(x=>x.id===GD.id),o);else S.testGroups.push(Object.assign({id:uid()},o));
+    save();closeModal();render(true);toast('Grup kaydedildi');
+  },
+  'gd-del':()=>{if(!confirm('Grup silinsin mi? Testler silinmez.'))return;S.testGroups=S.testGroups.filter(x=>x.id!==GD.id);save();closeModal();render(true);},
+  labK:()=>openForm({title:'Çarpanlar',note:'Değişiklik sadece bundan sonraki ziyaretlere uygulanır.',
+    fields:[{k:'labK',label:'Laboratuvara ödenen = liste fiyatı ×',type:'num',value:ns(S.settings.labK)},{k:'satK',label:'Hastaya satış = liste fiyatı ×',type:'num',value:ns(S.settings.satK)}],
+    onSave:v=>{const a=num(v.labK),b=num(v.satK);if(!(a>0)||!(b>0)){toast('İki çarpanı da yaz');return false;}S.settings.labK=a;S.settings.satK=b;save();render(true);}}),
+  labXl:()=>{const inp=$('#xlIn');inp.value='';inp.onchange=async()=>{
+    const f=inp.files[0];if(!f)return;
+    let list;
+    try{list=parseTestRows(await readSheetRows(f));}
+    catch(e){alert(e.message==='nodecomp'?'Telefonun bu Excel dosyasını açamıyor (iOS güncel değil). Excel\'i bilgisayarda "CSV (noktalı virgülle ayrılmış)" olarak kaydedip onu yükle.':e.message==='header'?'Dosyada "TEST ADI" ve "FİYAT" başlıklı sütunlar bulunamadı.':'Dosya okunamadı. Excel (.xlsx) veya CSV olmalı.');return;}
+    if(!list.length){alert('Dosyada fiyatı olan test bulunamadı.');return;}
+    const m=matchTests(list);
+    const nw=m.filter(z=>!z.t),ch=m.filter(z=>z.t&&(!hasF(z.t)||round2(num(z.t.fiyat))!==z.x.fiyat)),same=m.length-nw.length-ch.length;
+    const left=S.tests.filter(t=>!m.some(z=>z.t===t)).length;
+    LX=m;
+    modal(`<h3>Fiyat listesi</h3><div class="note"><b>${list.length}</b> test bulundu.</div><table class="tb"><tr><td>Yeni eklenecek</td><td class="r">${nw.length}</td></tr><tr><td>Fiyatı güncellenecek</td><td class="r">${ch.length}</td></tr><tr><td>Değişmeyen</td><td class="r">${same}</td></tr>${left?`<tr><td>Listede olmayan eski testler (silinmez)</td><td class="r">${left}</td></tr>`:''}</table>
+    ${ch.length?`<h2>Fiyatı değişenlerden örnekler</h2>${ch.slice(0,5).map(z=>`<div class="muted">${esc(z.x.ad)}: ${hasF(z.t)?money(z.t.fiyat):'elle'} → ${money(z.x.fiyat)}</div>`).join('')}`:''}
+    <div class="muted" style="margin-top:8px">Gruplar ve eski ziyaretler değişmez.</div>
+    <div class="btns"><button class="btn gray" data-act="m-close">Vazgeç</button><button class="btn" data-act="labXlOk">Yükle</button></div>`);
+  };inp.click();},
+  labXlOk:()=>{
+    if(!LX)return;let n=0,u=0;
+    LX.forEach(({x,t})=>{if(t){t.fiyat=x.fiyat;t.ad=x.ad;if(x.kod)t.kod=x.kod;u++;}else{S.tests.push({id:uid(),kod:x.kod,ad:x.ad,fiyat:x.fiyat,maliyet:0,satis:0});n++;}});
+    LX=null;save();closeModal();render(true);toast(n+' test eklendi, '+u+' test güncellendi');
   },
   'v-save':()=>{
     if(!V.tarih){toast('Tarih seçmelisin');return;}
@@ -1118,7 +1400,7 @@ const A={
     const v={
       id:V.id||uid(),patientId:V.patientId,tarih:V.tarih,saat:V.saat,kim:V.kim,kimAd:nurse?(hem?hem.ad:(V.kimAd||'Hemşire')):'',
       hizmetler:V.hizmetler.slice(),svcN:Object.assign({},V.svcN||{}),hizmetAd:V.hizmetler.map(id=>{const sv=S.services.find(s=>s.id===id);const n=(V.svcN||{})[id]||1;return sv?sv.ad+(n>1?' ×'+n:''):null;}).filter(Boolean),
-      items:V.items.filter(i=>i.adet>0).map(i=>({id:i.id,ad:i.ad,tip:i.tip,adet:i.adet,birim:num(i.birim)})),
+      items:V.items.filter(i=>i.adet>0).map(i=>{const o={id:i.id,ad:i.ad,tip:i.tip,adet:i.adet,birim:num(i.birim)};if(i.uyg!=null&&i.uyg!==i.adet)o.uyg=i.uyg;return o;}),
       tests:V.tests.map(t=>({id:t.id,ad:t.ad,maliyet:num(t.maliyet),satis:num(t.satis)})),
       hizmetBedeli:num(V.hizmetBedeli),ucret:num(V.ucret),odenen:num(V.odenen),hemsireUcret:nurse?num(V.hemsireUcret):0,
       labOdendi:!!V.labOdendi,sikayet:V.sikayet,olcum:V.olcum,kontrol:V.kontrol,not:V.not
@@ -1258,6 +1540,7 @@ const A={
         Object.assign(x,{tarih:v.tarih,saat:v.saat,ad:v.ad,soyad:v.soyad,tel:v.tel,dogum:v.dogum,ucret:num(v.ucret),maliyet:num(v.maliyet)});
         if(x.tarih)x.w=x.w.filter(a=>a.k!=='t');
         if(x.ad)x.w=x.w.filter(a=>a.k!=='a');
+        if(x.anon&&x.ad&&x.ad!=='İsimsiz')x.anon=false;
         const ex=matchPatient(x);x.mark=ex?'mevcut hasta':'yeni hasta';
         x.include=x.w.length===0&&!!x.tarih&&!!x.ad;
         render(true);
@@ -1268,20 +1551,22 @@ const A={
     const selP=(IM.pays||[]).filter(y=>y.include);
     if(!sel.length&&!selP.length){toast('Seçili kayıt yok');return;}
     if(!confirm(sel.length+' ziyaret ve '+selP.length+' ödeme kaydedilecek. Önce yedek aldın mı? Devam edilsin mi?'))return;
-    let np=0;
+    let np=0,nn=0;
+    const nurseId=ad=>{const k=nkey(ad);let n=S.nurses.find(z=>nkey(z.ad)===k);if(!n){n={id:uid(),ad};S.nurses.push(n);nn++;}return n;};
     sel.forEach(x=>{
       let p=matchPatient(x);
-      if(!p){p={id:uid(),ad:x.ad,soyad:x.soyad,dogum:x.dogum||'',tc:x.tc||'',tel:x.tel||'',adres:x.adres||'',not:'',created:today()};S.patients.push(p);np++;}
-      else{if(!p.tel&&x.tel)p.tel=x.tel;if(!p.tc&&x.tc)p.tc=x.tc;if(!p.dogum&&x.dogum)p.dogum=x.dogum;if(!p.adres&&x.adres)p.adres=x.adres;}
-      S.visits.push({id:uid(),patientId:p.id,tarih:x.tarih,saat:x.saat||'',kim:'ben',kimAd:'',hizmetler:x.hizmetler,hizmetAd:x.hizmetAd,
-        items:x.items.map(i=>Object.assign({},i)),tests:[],hizmetBedeli:0,ucret:num(x.ucret),odenen:num(x.ucret),hemsireUcret:0,labOdendi:true,
-        svcN:x.svcN||{},sikayet:x.sikayet||'',olcum:'',kontrol:'',not:'Not defterinden aktarıldı',eski:true,maliyet:num(x.maliyet)});
+      if(!p){p={id:uid(),ad:x.ad,soyad:x.soyad,dogum:x.dogum||'',tc:x.tc||'',tel:x.tel||'',adres:x.adres||'',not:x.pnot||'',created:today()};S.patients.push(p);np++;}
+      else{if(!p.tel&&x.tel)p.tel=x.tel;if(!p.tc&&x.tc)p.tc=x.tc;if(!p.dogum&&x.dogum)p.dogum=x.dogum;if(!p.adres&&x.adres)p.adres=x.adres;if(!p.not&&x.pnot)p.not=x.pnot;}
+      const nu=x.kimAd?nurseId(x.kimAd):null;
+      S.visits.push({id:uid(),patientId:p.id,tarih:x.tarih,saat:x.saat||'',kim:nu?nu.id:'ben',kimAd:nu?nu.ad:'',hizmetler:x.hizmetler,hizmetAd:x.hizmetAd,
+        items:x.items.map(i=>Object.assign({},i)),tests:[],hizmetBedeli:0,ucret:num(x.ucret),odenen:num(x.ucret),hemsireUcret:nu?num(x.hemsireUcret):0,labOdendi:true,
+        svcN:x.svcN||{},sikayet:x.sikayet||'',olcum:'',kontrol:'',not:'Not defterinden aktarıldı'+(x.dnot?' · '+x.dnot:''),eski:true,maliyet:num(x.maliyet)});
     });
     selP.forEach(y=>S.extPay.push({id:uid(),tip:y.tip,tarih:y.tarih,ad:y.ad,tutar:num(y.tutar),dahil:true,not:'Not defterinden aktarıldı'}));
     S.settings.sinceBackup+=sel.length;save();
     IM={text:'',items:null,cmp:null,pays:[]};
     H=[];R={page:'patients'};render();
-    toast(sel.length+' ziyaret, '+selP.length+' ödeme aktarıldı, '+np+' yeni hasta açıldı');
+    toast(sel.length+' ziyaret, '+selP.length+' ödeme aktarıldı, '+np+' yeni hasta açıldı'+(nn?', '+nn+' hemşire eklendi':''));
   },
   // yedek
   'bk-make':()=>openForm({title:'Yedek şifresi',note:'Bu şifreyi unutursan yedek açılamaz. Güvenli bir yere not al.',fields:[{k:'pw',label:'Şifre (en az 6 karakter)',type:'text',value:''},{k:'pw2',label:'Şifre (tekrar)',type:'text',value:''}],
@@ -1342,6 +1627,9 @@ document.addEventListener('input',e=>{
   if(t.id==='pk_q')pkRender();
   if(t.id==='im_text')IM.text=t.value;
   if(t.id==='ps_q'){$('#ps_l').innerHTML=plist(t.value,'page');}
+  if(t.id==='lab_q'){R.lq=t.value;$('#lab_l').innerHTML=labList(t.value);}
+  if(t.id==='vt_q'){VQ=t.value;$('#vt_l').innerHTML=vtList();}
+  if(t.id==='gd_q'&&GD){GD.q=t.value;$('#gd_l').innerHTML=gdList();}
 });
 document.addEventListener('change',e=>{
   const t=e.target;
@@ -1357,6 +1645,8 @@ document.addEventListener('change',e=>{
   if(!S){S=defaults();await kvSet('state',S);}
   ensureShape(S);
   if(!S.settings.m15){S.settings.m15=1;if(!S.expCats.includes('Avukatlık ücreti')){const i=S.expCats.indexOf('Diğer');if(i>=0)S.expCats.splice(i,0,'Avukatlık ücreti');else S.expCats.push('Avukatlık ücreti');}await kvSet('state',S);}
+  // 1.8: daha önce kesirli (0,5 gibi) kaydedilen ilaçlar: uygulanan miktar korunur, düşen adet tama yuvarlanır
+  if(!S.settings.m18){S.settings.m18=1;S.visits.forEach(v=>(v.items||[]).forEach(i=>{const a=num(i.adet);if(a>0&&Math.abs(a-Math.round(a))>1e-9){i.uyg=round2(a);i.adet=Math.ceil(a);}}));await kvSet('state',S);}
   if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
   if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
   render();
