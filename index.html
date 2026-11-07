@@ -99,7 +99,7 @@ a.tel{color:var(--p);text-decoration:none;font-weight:600}
 <script>
 'use strict';
 /* ============ Yardımcılar ============ */
-const VERSION='1.1';
+const VERSION='1.2';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
@@ -680,13 +680,25 @@ function splitName(n){
   if(w.length===1||/^\(/.test(w[w.length-1]))return {ad:n,soyad:''};
   return {ad:w.slice(0,-1).join(' '),soyad:w[w.length-1]};
 }
+const META_RX=/^(?:d\.?\s?t\.?|do[ğg]um|t\.?\s?c\.?)\s*[:.\-]?\s*\d|^\d{11}$/i;
 function parsePerson(line){
-  let s=line.replace(/ /g,' '),tc='',tel='';
+  let s=line.replace(/ /g,' '),tc='',tel='',dogum='';
   s=s.replace(/t\.?\s?c\.?\s*(?:kimlik)?\s*(?:no)?\s*[:.]?\s*(\d{11})/i,(m,d)=>{tc=d;return ' ';});
+  s=s.replace(/(?:(?:d\.?\s?t\.?|do[ğg]um(?:\s*tarihi)?)\s*[:.\-]?\s*)?(?<!\d)(\d{1,2})[./-](\d{1,2})[./-](\d{4})(?!\d)/i,(m,d,mo,y)=>{
+    const dt=new Date(+y,+mo-1,+d);
+    if(dt.getFullYear()===+y&&dt.getMonth()===+mo-1&&dt.getDate()===+d&&+y>=1900&&+y<=new Date().getFullYear()){dogum=ymd(dt);return ' ';}
+    return m;
+  });
   s=s.replace(PHONE_RX,m=>{tel=m.replace(/\D/g,'');return ' ';});
+  if(!tc)s=s.replace(/(?<!\d)[1-9]\d{10}(?!\d)/,m=>{tc=m;return ' ';});
   if(tel.length===10)tel='0'+tel;
-  s=s.replace(/\s+/g,' ').trim().replace(/^[-–.:\s]+|[-–.:\s]+$/g,'');
-  return Object.assign(splitName(s),{tel,tc});
+  s=s.replace(/\s+/g,' ').trim().replace(/(?:^|\s)(?:t\.?\s?c\.?|d\.?\s?t\.?)\s*[:.\-]?$/i,'').replace(/^[-–.:\s]+|[-–.:\s]+$/g,'');
+  return Object.assign(splitName(s),{tel,tc,dogum});
+}
+function isPersonStart(L,nx){
+  if(PHONE_RX.test(L))return true;
+  if(SERV_RX.test(L)||META_RX.test(L))return false;
+  return SERV_RX.test(nx)||META_RX.test(nx)||(PHONE_RX.test(nx)&&!parsePerson(nx).ad);
 }
 function normDrug(n){
   n=n.replace(/[.,;:]+$/,'').replace(/\s+/g,' ').trim();
@@ -757,6 +769,7 @@ function parseNotes(text){
       }
       flush();skip=false;
     }else if(STOP_RX.test(L)){skip=true;sec={u:null,m:null};g=null;ses=null;per=null;continue;}
+    if(dm&&per&&!per.svc&&!per.dogum&&+dm[3]<2005){per.dogum=ymd(new Date(+dm[3],+dm[2]-1,+dm[1]));continue;}
     if(dm){
       if(!g||g.closed)newG();
       const d={d:+dm[1],m:+dm[2],y:+dm[3],t:dm[4]!=null?pad(+dm[4])+':'+dm[5]:''};
@@ -765,10 +778,15 @@ function parseNotes(text){
     }
     const mc=costLine(L);
     if(mc){if(!g)newG();g.costs[mc.k]=mc.v;g.closed=true;per=null;continue;}
-    if(PHONE_RX.test(L)||(SERV_RX.test(nx)&&!SERV_RX.test(L))){
+    if(per&&!per.svc&&META_RX.test(L)){
+      const pp=parsePerson(L);['tel','tc','dogum'].forEach(k=>{if(pp[k]&&!per[k])per[k]=pp[k];});continue;
+    }
+    if(isPersonStart(L,nx)){
+      const pp=parsePerson(L);
+      if(!pp.ad&&per&&!per.svc){['tel','tc','dogum'].forEach(k=>{if(pp[k]&&!per[k])per[k]=pp[k];});continue;}
       if(!g||g.closed)newG();
       if(!ses){ses={dates:[],persons:[]};g.sessions.push(ses);}
-      per=Object.assign(parsePerson(L),{svc:null,addr:[]});
+      per=Object.assign(pp,{svc:null,addr:[]});
       ses.persons.push(per);continue;
     }
     if(per){if(!per.svc)per.svc=parseService(L);else per.addr.push(L);continue;}
@@ -800,7 +818,7 @@ function parseNotes(text){
         return {id:st?st.id:'x'+uid(),ad:st?st.ad:it.ad,tip:st?st.tip:'ilac',adet:it.adet,birim:0};
       });
       const svc=sv.base==='Serum'?S.services.find(s=>s.tip==='serum'):S.services.find(s=>lc(s.ad)===lc(sv.base));
-      out.push({include:false,w,n,tarih,saat,ad:p.ad,soyad:p.soyad,tel:p.tel,tc:p.tc,adres:p.addr.join(' '),
+      out.push({include:false,w,n,tarih,saat,ad:p.ad,soyad:p.soyad,tel:p.tel,tc:p.tc,dogum:p.dogum||'',adres:p.addr.join(' '),
         hizmetler:svc?[svc.id]:[],hizmetAd:sv.base?[sv.base+(sv.count>1?' ×'+sv.count:'')]:[],items,sikayet:sv.note,
         ucret:share(U,i),maliyet:share(M,i),mark:''});
     });
@@ -1069,10 +1087,10 @@ const A={
     const x=IM.items[+d.i];
     openForm({title:'Kaydı düzelt',fields:[
       {k:'tarih',label:'Tarih',type:'date',value:x.tarih},{k:'saat',label:'Saat',type:'time',value:x.saat},
-      {k:'ad',label:'Ad',value:x.ad},{k:'soyad',label:'Soyad',value:x.soyad},{k:'tel',label:'Telefon',type:'tel',value:x.tel},
+      {k:'ad',label:'Ad',value:x.ad},{k:'soyad',label:'Soyad',value:x.soyad},{k:'tel',label:'Telefon',type:'tel',value:x.tel},{k:'dogum',label:'Doğum tarihi',type:'date',value:x.dogum},
       {k:'ucret',label:'Ücret (TL)',type:'num',value:ns(x.ucret)},{k:'maliyet',label:'Maliyet (TL)',type:'num',value:ns(x.maliyet)}],
       onSave:v=>{
-        Object.assign(x,{tarih:v.tarih,saat:v.saat,ad:v.ad,soyad:v.soyad,tel:v.tel,ucret:num(v.ucret),maliyet:num(v.maliyet)});
+        Object.assign(x,{tarih:v.tarih,saat:v.saat,ad:v.ad,soyad:v.soyad,tel:v.tel,dogum:v.dogum,ucret:num(v.ucret),maliyet:num(v.maliyet)});
         if(x.tarih)x.w=x.w.filter(a=>a.k!=='t');
         if(x.ad)x.w=x.w.filter(a=>a.k!=='a');
         const ex=matchPatient(x);x.mark=ex?'kayıtlı hasta':'yeni hasta';
@@ -1087,8 +1105,8 @@ const A={
     let np=0;
     sel.forEach(x=>{
       let p=matchPatient(x);
-      if(!p){p={id:uid(),ad:x.ad,soyad:x.soyad,dogum:'',tc:x.tc||'',tel:x.tel||'',adres:x.adres||'',not:'',created:today()};S.patients.push(p);np++;}
-      else{if(!p.tel&&x.tel)p.tel=x.tel;if(!p.tc&&x.tc)p.tc=x.tc;if(!p.adres&&x.adres)p.adres=x.adres;}
+      if(!p){p={id:uid(),ad:x.ad,soyad:x.soyad,dogum:x.dogum||'',tc:x.tc||'',tel:x.tel||'',adres:x.adres||'',not:'',created:today()};S.patients.push(p);np++;}
+      else{if(!p.tel&&x.tel)p.tel=x.tel;if(!p.tc&&x.tc)p.tc=x.tc;if(!p.dogum&&x.dogum)p.dogum=x.dogum;if(!p.adres&&x.adres)p.adres=x.adres;}
       S.visits.push({id:uid(),patientId:p.id,tarih:x.tarih,saat:x.saat||'',kim:'ben',kimAd:'',hizmetler:x.hizmetler,hizmetAd:x.hizmetAd,
         items:x.items.map(i=>Object.assign({},i)),tests:[],hizmetBedeli:0,ucret:num(x.ucret),odenen:num(x.ucret),hemsireUcret:0,labOdendi:true,
         sikayet:x.sikayet||'',olcum:'',kontrol:'',not:'Not defterinden aktarıldı',eski:true,maliyet:num(x.maliyet)});
