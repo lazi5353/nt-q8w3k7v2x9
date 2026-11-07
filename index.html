@@ -1,0 +1,1180 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Hasta Takip">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#0f6b8a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.png">
+<title>Hasta Takip</title>
+<style>
+:root{--p:#0f6b8a;--p2:#e6f3f7;--bg:#f3f5f7;--card:#fff;--t:#17212b;--m:#667788;--red:#d23b3b;--grn:#1f8f4e;--org:#d98a00;--line:#e1e6ea}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;font:16px/1.4 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--t)}
+#app{max-width:720px;margin:0 auto;min-height:100vh;padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+header.top{position:sticky;top:0;z-index:5;background:var(--p);color:#fff;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;display:flex;align-items:center;gap:10px;min-height:52px}
+header.top h1{font-size:18px;margin:0;flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hb{background:rgba(255,255,255,.18);border:0;color:#fff;border-radius:8px;padding:7px 11px;font-size:15px}
+main{padding:12px}
+h2{font-size:15px;color:var(--m);margin:18px 2px 8px;text-transform:uppercase;letter-spacing:.3px}
+h3{margin:0 0 10px}
+.card{background:var(--card);border-radius:12px;padding:12px;margin-bottom:10px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.card.alert{border-left:4px solid var(--org)}
+.card.danger{border-left:4px solid var(--red)}
+.item{display:flex;align-items:center;gap:10px}
+.grow{flex:1;min-width:0}
+.qty{text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.qty>div{font-size:20px;font-weight:700}
+.muted{color:var(--m);font-size:14px}
+.red{color:var(--red)}.grn{color:var(--grn)}.org{color:var(--org)}
+.big{font-size:26px;font-weight:700}
+.empty{color:var(--m);text-align:center;padding:14px;font-size:14px}
+label{display:block;font-size:14px;color:var(--m);margin:8px 0 0}
+input,select,textarea{display:block;width:100%;font:inherit;color:var(--t);padding:10px;border:1px solid #cfd8de;border-radius:9px;background:#fff;margin-top:4px;min-height:44px}
+input[type=checkbox]{display:inline-block;width:22px;height:22px;min-height:0;margin:0 8px 0 0;vertical-align:middle}
+label.chk{display:flex;align-items:center;color:var(--t);font-size:16px;margin:12px 0 4px}
+.row{display:flex;gap:10px}.row>*{flex:1;min-width:0}
+.btn{display:inline-block;background:var(--p);color:#fff;border:0;border-radius:10px;padding:11px 16px;font:inherit;font-weight:600;text-align:center;min-height:44px}
+.btn.gray{background:#e3e8ec;color:var(--t)}.btn.red{background:var(--red)}.btn.grn{background:var(--grn)}
+.btn.sm{padding:6px 10px;font-size:14px;min-height:34px}
+.btn.full{display:block;width:100%;margin-bottom:10px}
+.btn.bigbtn{font-size:18px;padding:15px}
+.btns{display:flex;gap:8px;margin-top:14px;justify-content:flex-end;flex-wrap:wrap}
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin:6px 0}
+.chip{border:1px solid #bcc9d1;background:#fff;color:var(--t);border-radius:20px;padding:8px 13px;font:inherit;font-size:15px;min-height:40px}
+.chip.on{background:var(--p);border-color:var(--p);color:#fff}
+.chip small{opacity:.7;margin-left:4px}
+.seg{display:flex;background:#e3e8ec;border-radius:10px;padding:3px;margin-bottom:10px}
+.seg button{flex:1;border:0;background:transparent;padding:9px 4px;border-radius:8px;font:inherit;font-size:14px;color:var(--t)}
+.seg button.on{background:#fff;font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.badge{display:inline-block;font-size:12px;border-radius:10px;padding:2px 8px;background:#eef1f3;color:var(--m);margin-left:4px}
+.badge.red{background:#fde8e8;color:var(--red)}.badge.org{background:#fff1d6;color:var(--org)}.badge.grn{background:#e0f4e8;color:var(--grn)}
+.note{background:var(--p2);border-radius:9px;padding:9px 11px;font-size:14px;margin:8px 0}
+.stepper{display:flex;align-items:center;gap:8px}
+.stepper button{width:36px;height:36px;border-radius:18px;border:1px solid #bcc9d1;background:#fff;font-size:20px;line-height:1}
+.tb{width:100%;border-collapse:collapse;font-size:15px}
+.tb td,.tb th{padding:7px 4px;border-bottom:1px solid var(--line);text-align:left}
+.tb .r,.tb th.r{text-align:right}
+.tb tr.hd td{font-weight:700;color:var(--m);font-size:13px;text-transform:uppercase;padding-top:12px}
+.tb tr.tot td{font-weight:700}
+.tb tr.sub td{color:var(--m);font-size:14px}
+.tb tr.click{cursor:pointer}
+.chart{display:flex;gap:2px;margin-top:6px}
+.col{flex:1;display:flex;flex-direction:column;align-items:center}
+.up{height:58px;display:flex;align-items:flex-end}.dn{height:58px;display:flex;align-items:flex-start}
+.col i{display:block;width:13px;background:var(--grn);border-radius:3px}.col i.neg{background:var(--red)}
+.col small{font-size:10px;color:var(--m)}
+nav.tabs{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:6}
+nav.tabs button{flex:1;border:0;background:transparent;padding:7px 0 6px;font:inherit;font-size:11px;color:var(--m);display:flex;flex-direction:column;align-items:center;gap:1px}
+nav.tabs button span{font-size:20px;line-height:1.2}
+nav.tabs button.on{color:var(--p);font-weight:700}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;z-index:20;overflow:auto;padding:14px;-webkit-overflow-scrolling:touch}
+#modal.on{display:block}
+#modal .box{background:#fff;border-radius:14px;padding:16px;max-width:560px;margin:14px auto}
+#toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:20px;font-size:14px;z-index:30;display:none;max-width:90%;text-align:center}
+img.prev{max-width:100%;border-radius:8px;display:block;margin:0 auto}
+a.tel{color:var(--p);text-decoration:none;font-weight:600}
+.sum{background:var(--p2)}
+.sum .tb td{border-color:#cfe3ea}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<nav class="tabs" id="tabs">
+<button data-act="tab" data-p="home" data-k="home"><span>🏠</span>Ana</button>
+<button data-act="tab" data-p="patients" data-k="patients"><span>👥</span>Hastalar</button>
+<button data-act="tab" data-p="stock" data-k="stock"><span>💊</span>Depo</button>
+<button data-act="tab" data-p="lab" data-k="lab"><span>🧪</span>Lab</button>
+<button data-act="tab" data-p="fin" data-k="fin"><span>📊</span>Maliye</button>
+<button data-act="tab" data-p="more" data-k="more"><span>⚙️</span>Daha</button>
+</nav>
+<div id="modal"></div>
+<div id="toast"></div>
+
+<script>
+'use strict';
+/* ============ Yardımcılar ============ */
+const VERSION='1.1';
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const pad=n=>String(n).padStart(2,'0');
+const ymd=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const today=()=>ymd(new Date());
+const nowTime=()=>{const d=new Date();return pad(d.getHours())+':'+pad(d.getMinutes());};
+const addDays=(s,n)=>{const [y,m,d]=s.split('-').map(Number);return ymd(new Date(y,m-1,d+n));};
+const dayDiff=(a,b)=>{const p=s=>{const [y,m,d]=s.split('-').map(Number);return Date.UTC(y,m-1,d);};return Math.round((p(b)-p(a))/86400000);};
+const fd=s=>s?s.split('-').reverse().join('.'):'';
+const round2=n=>Math.round(n*100)/100;
+const MN=['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+const MS=['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
+function num(x){
+  if(typeof x==='number') return isFinite(x)?x:0;
+  let s=String(x==null?'':x).trim().replace(/\s/g,'');
+  if(!s) return 0;
+  if(s.includes(',')) s=s.replace(/\./g,'').replace(',','.');
+  else if(/^\d{1,3}(\.\d{3})+$/.test(s)) s=s.replace(/\./g,'');
+  const n=parseFloat(s); return isFinite(n)?n:0;
+}
+const ns=n=>(n==null||n==='')?'':(typeof n==='string'?n:String(n).replace('.',','));
+const fmt=new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:0,maximumFractionDigits:2});
+const money=n=>fmt.format(round2(num(n)));
+const lc=s=>String(s||'').toLocaleLowerCase('tr');
+function ageOf(d){if(!d)return '';const t=new Date(),[y,m,dd]=d.split('-').map(Number);let a=t.getFullYear()-y;if(t.getMonth()+1<m||(t.getMonth()+1===m&&t.getDate()<dd))a--;return a;}
+function validTC(t){
+  if(!/^\d{11}$/.test(t)||t[0]==='0') return false;
+  const d=t.split('').map(Number);
+  const d10=(((d[0]+d[2]+d[4]+d[6]+d[8])*7)-(d[1]+d[3]+d[5]+d[7]))%10;
+  const d11=d.slice(0,10).reduce((a,b)=>a+b,0)%10;
+  return ((d10+10)%10)===d[9]&&d11===d[10];
+}
+let toastT;
+function toast(m){const e=$('#toast');e.textContent=m;e.style.display='block';clearTimeout(toastT);toastT=setTimeout(()=>e.style.display='none',3200);}
+
+/* ============ Veritabanı (IndexedDB) ============ */
+let db;
+function idb(){return new Promise((res,rej)=>{const r=indexedDB.open('hastatakip',1);r.onupgradeneeded=()=>{const d=r.result;d.createObjectStore('kv');d.createObjectStore('files');};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+const rq=r=>new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});
+const tx=(s,m)=>db.transaction(s,m).objectStore(s);
+const kvGet=k=>rq(tx('kv','readonly').get(k));
+const kvSet=(k,v)=>rq(tx('kv','readwrite').put(v,k));
+const fGet=id=>rq(tx('files','readonly').get(id));
+const fPut=(id,b)=>rq(tx('files','readwrite').put(b,id));
+const fDel=id=>rq(tx('files','readwrite').delete(id));
+const fClear=()=>rq(tx('files','readwrite').clear());
+let saving=Promise.resolve();
+function save(){saving=saving.then(()=>kvSet('state',S)).catch(e=>alert('Kaydedilemedi! '+e));return saving;}
+
+/* ============ Başlangıç verisi ============ */
+function defaults(){
+  const st=(id,ad,tip)=>({id,ad,tip,adet:0,birim:0,minAdet:0,skt:''});
+  return {
+    v:1,patients:[],visits:[],plans:[],calls:[],files:[],purchases:[],expenses:[],nurses:[],
+    tests:[],
+    stock:[
+      st('sr_iz250','İzotonik 250','serum'),st('sr_iz500','İzotonik 500','serum'),
+      st('sr_rl250','Ringer Laktat 250','serum'),st('sr_rl500','Ringer Laktat 500','serum'),
+      st('sr_dek','Dekstroz','serum'),st('sr_izo','İzolen','serum'),
+      st('st_set','Serum seti','malzeme'),st('st_enj','Enjektör','malzeme'),st('st_intra','İntraket','malzeme'),
+      st('st_flaster','Flaster','malzeme'),st('st_probe','Ateş ölçer probu','malzeme'),st('st_strip','Kan şekeri stripi','malzeme')
+    ],
+    services:[
+      {id:'s_serum',ad:'Serum',tip:'serum',ucret:0,malz:[{id:'st_set',adet:1},{id:'st_enj',adet:1},{id:'st_intra',adet:1},{id:'st_flaster',adet:1}]},
+      {id:'s_ates',ad:'Ateş ölçme',tip:'normal',ucret:0,malz:[{id:'st_probe',adet:1}]},
+      {id:'s_seker',ad:'Kan şekeri',tip:'normal',ucret:0,malz:[{id:'st_strip',adet:1}]},
+      {id:'s_enj',ad:'Enjeksiyon / ilaç uygulaması',tip:'normal',ucret:0,malz:[{id:'st_enj',adet:1}]},
+      {id:'s_lab',ad:'Laboratuvar',tip:'lab',ucret:0,malz:[]}
+    ],
+    expCats:['Yakıt','Araç bakım','Eczane (ilaç dışı)','Diğer'],
+    settings:{lastBackup:null,sinceBackup:0,sktDays:30}
+  };
+}
+function ensureShape(s){const d=defaults();Object.keys(d).forEach(k=>{if(s[k]===undefined)s[k]=d[k];});Object.keys(d.settings).forEach(k=>{if(s.settings[k]===undefined)s.settings[k]=d.settings[k];});return s;}
+
+/* ============ Hesaplar ============ */
+function isNurse(v){return v.kim&&v.kim!=='ben';}
+function visitCalc(v){
+  if(v.eski){const m=num(v.maliyet),u=num(v.ucret);return {itemCost:0,labCost:0,nurseFee:0,eski:m,maliyet:m,kar:u-m,borc:Math.max(0,round2(u-num(v.odenen)))};}
+  const nurse=isNurse(v);
+  const itemCost=nurse?0:(v.items||[]).reduce((a,i)=>a+num(i.adet)*num(i.birim),0);
+  const labCost=(v.tests||[]).reduce((a,t)=>a+num(t.maliyet),0);
+  const nurseFee=nurse?num(v.hemsireUcret):0;
+  const maliyet=itemCost+labCost+nurseFee;
+  const ucret=num(v.ucret);
+  return {itemCost,labCost,nurseFee,eski:0,maliyet,kar:ucret-maliyet,borc:Math.max(0,round2(ucret-num(v.odenen)))};
+}
+function allCats(){const c=[...S.expCats];S.expenses.forEach(e=>{if(!c.includes(e.kategori))c.push(e.kategori);});return c;}
+function periodStats(y,m){
+  const inP=d=>{if(!d)return false;const yy=+d.slice(0,4),mm=+d.slice(5,7)-1;return yy===y&&(m==null||mm===m);};
+  const r={n:0,ucret:0,odenen:0,ilac:0,lab:0,hems:0,eski:0,labBorc:0,gc:{},giderTop:0,alim:0};
+  S.visits.filter(v=>inP(v.tarih)).forEach(v=>{
+    const c=visitCalc(v);r.n++;r.ucret+=num(v.ucret);r.odenen+=num(v.odenen);
+    r.ilac+=c.itemCost;r.lab+=c.labCost;r.hems+=c.nurseFee;r.eski+=c.eski;
+    if(c.labCost>0&&!v.labOdendi)r.labBorc+=c.labCost;
+  });
+  allCats().forEach(c=>r.gc[c]=0);
+  S.expenses.filter(e=>inP(e.tarih)).forEach(e=>{r.gc[e.kategori]=(r.gc[e.kategori]||0)+num(e.tutar);r.giderTop+=num(e.tutar);});
+  S.purchases.filter(p=>inP(p.tarih)).forEach(p=>r.alim+=num(p.tutar));
+  r.borc=r.ucret-r.odenen;
+  r.visitCost=r.ilac+r.lab+r.hems+r.eski;
+  r.tmal=r.visitCost+r.giderTop;
+  r.net=r.ucret-r.tmal;
+  return r;
+}
+function applyStock(v,sign){
+  if(isNurse(v)||v.eski)return;
+  (v.items||[]).forEach(i=>{const s=S.stock.find(x=>x.id===i.id);if(s)s.adet=round2(num(s.adet)+sign*num(i.adet));});
+}
+
+/* ============ Durum ve gezinme ============ */
+let S,R={page:'home'},H=[],V=null,MF=null,PK=null,SD=null,BK=null,P={tab:'visits'};
+const pname=p=>p?((p.ad||'')+' '+(p.soyad||'')).trim():'(silinmiş hasta)';
+const patient=id=>S.patients.find(p=>p.id===id);
+const TABMAP={home:'home',patients:'patients',patient:'patients',visit:'patients',stock:'stock',lab:'lab',fin:'fin',more:'more',expenses:'more',nurses:'more',services:'more',backup:'more',import:'more'};
+
+function render(keep){
+  let pg;
+  switch(R.page){
+    case 'home':pg=pHome();break;case 'patients':pg=pPatients();break;case 'patient':pg=pPatient();break;
+    case 'visit':pg=pVisit();break;case 'stock':pg=pStock();break;case 'lab':pg=pLab();break;
+    case 'fin':pg=pFin();break;case 'more':pg=pMore();break;case 'expenses':pg=pExpenses();break;
+    case 'nurses':pg=pNurses();break;case 'services':pg=pServices();break;case 'backup':pg=pBackup();break;case 'import':pg=pImport();break;
+    default:pg=pHome();
+  }
+  $('#app').innerHTML=`<header class="top">${pg.back?'<button class="hb" data-act="back">‹ Geri</button>':''}<h1>${esc(pg.t)}</h1>${pg.right||''}</header><main>${pg.h}</main>`;
+  document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.k===TABMAP[R.page]));
+  if(R.page==='visit')vRefresh();
+  if(!keep)window.scrollTo(0,0);
+}
+function modal(html){const m=$('#modal');m.innerHTML=`<div class="box">${html}</div>`;m.classList.add('on');}
+function closeModal(){$('#modal').classList.remove('on');$('#modal').innerHTML='';MF=null;PK=null;SD=null;}
+
+/* ============ Genel form penceresi ============ */
+function fieldHtml(f){
+  const id='f_'+f.k,val=f.value==null?'':f.value;
+  if(f.type==='check')return `<label class="chk"><input type="checkbox" id="${id}" ${val?'checked':''}> ${esc(f.label)}</label>`;
+  let c;
+  if(f.type==='select')c=`<select id="${id}">${f.options.map(o=>`<option value="${esc(o[0])}" ${String(o[0])===String(val)?'selected':''}>${esc(o[1])}</option>`).join('')}</select>`;
+  else if(f.type==='area')c=`<textarea id="${id}" rows="3">${esc(val)}</textarea>`;
+  else{
+    const t={date:'date',time:'time'}[f.type]||'text';
+    const im=f.type==='num'?'inputmode="decimal"':f.type==='tel'?'inputmode="tel"':f.type==='tc'?'inputmode="numeric" maxlength="11"':'';
+    c=`<input id="${id}" type="${t}" ${im} value="${esc(val)}" placeholder="${esc(f.ph||'')}" autocomplete="off">`;
+  }
+  return `<label>${esc(f.label)}${c}</label>`;
+}
+function openForm(o){
+  MF=o;
+  modal(`<h3>${esc(o.title)}</h3>${o.note?`<div class="note">${o.note}</div>`:''}${o.fields.map(fieldHtml).join('')}<div class="btns">${o.onDelete?'<button class="btn red" data-act="m-del">Sil</button>':''}<button class="btn gray" data-act="m-close">Vazgeç</button><button class="btn" data-act="m-save">Kaydet</button></div>`);
+}
+function collect(){const v={};MF.fields.forEach(f=>{const e=$('#f_'+f.k);v[f.k]=f.type==='check'?e.checked:e.value.trim();});return v;}
+
+/* ============ Hasta seçici ============ */
+function plist(q,mode){
+  q=lc(q);
+  const L=S.patients.filter(p=>!q||lc(pname(p)).includes(q)||(p.tc||'').includes(q)||(p.tel||'').includes(q)).sort((a,b)=>pname(a).localeCompare(pname(b),'tr'));
+  if(!L.length)return '<div class="empty">Hasta bulunamadı</div>';
+  const t=today();
+  return L.map(p=>{
+    const vs=S.visits.filter(v=>v.patientId===p.id);
+    const last=vs.map(v=>v.tarih).sort().pop();
+    const borc=vs.reduce((a,v)=>a+visitCalc(v).borc,0);
+    const plan=S.plans.some(x=>x.patientId===p.id&&!x.done);
+    const act=mode==='pick'?'data-act="pk-sel"':'data-act="go" data-p="patient"';
+    return `<div class="card item" ${act} data-id="${p.id}"><div class="grow"><b>${esc(pname(p))}</b>${plan?'<span class="badge">📅 plan</span>':''}${borc>0?`<span class="badge red">borç ${money(borc)}</span>`:''}<div class="muted">${last?'Son ziyaret: '+fd(last):'Henüz ziyaret yok'}${p.tel?' · '+esc(p.tel):''}</div></div><div class="muted">›</div></div>`;
+  }).join('');
+}
+function pickPatient(cb){
+  PK={cb};
+  modal(`<h3>Hasta seç</h3><input id="pk_q" placeholder="İsim ara..." autocomplete="off"><div id="pk_l" style="margin-top:10px"></div><div class="btns"><button class="btn gray" data-act="m-close">Vazgeç</button><button class="btn" data-act="pk-new">+ Yeni hasta</button></div>`);
+  pkRender();
+}
+function pkRender(){const e=$('#pk_l');if(e)e.innerHTML=plist($('#pk_q').value,'pick');}
+
+/* ============ Hasta formu ============ */
+function patForm(p,after){
+  openForm({
+    title:p?'Hasta bilgilerini düzenle':'Yeni hasta',
+    fields:[
+      {k:'ad',label:'Ad',value:p&&p.ad},{k:'soyad',label:'Soyad',value:p&&p.soyad},
+      {k:'dogum',label:'Doğum tarihi',type:'date',value:p&&p.dogum},
+      {k:'tc',label:'TC kimlik no',type:'tc',value:p&&p.tc},
+      {k:'tel',label:'Telefon',type:'tel',value:p&&p.tel},
+      {k:'adres',label:'Ev adresi',type:'area',value:p&&p.adres},
+      {k:'not',label:'Önemli notlar (alerji, kronik hastalık vb.)',type:'area',value:p&&p.not}
+    ],
+    onSave:v=>{
+      if(!v.ad){toast('Ad yazmalısın');return false;}
+      if(v.tc&&!validTC(v.tc)&&!confirm('TC kimlik numarası geçersiz görünüyor. Yine de kaydedilsin mi?'))return false;
+      if(v.tc&&S.patients.some(x=>x.tc===v.tc&&(!p||x.id!==p.id))&&!confirm('Bu TC ile kayıtlı başka bir hasta var. Yine de kaydedilsin mi?'))return false;
+      let o=p;
+      if(p)Object.assign(p,v);else{o=Object.assign({id:uid(),created:today()},v);S.patients.push(o);}
+      save();render(true);if(after)after(o);
+    }
+  });
+}
+
+/* ============ SAYFALAR ============ */
+function section(title,rows){return rows.length?`<h2>${title}</h2>${rows.join('')}`:'';}
+
+function pHome(){
+  const t=today(),y=+t.slice(0,4),m=+t.slice(5,7)-1;
+  const st=periodStats(y,m);
+  let h='';
+  if(S.patients.length===0)h+=`<div class="note"><b>Hoş geldin.</b> Önce <b>Depo</b> sayfasında ilaç ve malzemelerini (birim maliyetleriyle), <b>Lab</b> sayfasında tahlil fiyatlarını gir. Gerçek hastaları girmeden birkaç gün <b>sahte kayıtlarla</b> dene.</div>`;
+  const ls=S.settings.lastBackup;
+  if(S.patients.length>0){
+    const days=ls?dayDiff(ls.slice(0,10),t):null;
+    if(ls==null)h+=`<div class="card danger"><b>Henüz yedek almadın.</b><div class="muted">Telefon bozulursa veya uygulama silinirse veriler gider.</div><button class="btn sm" style="margin-top:8px" data-act="go" data-p="backup">Yedek al</button></div>`;
+    else if(days>=7||S.settings.sinceBackup>=5)h+=`<div class="card alert"><b>Yedek zamanı.</b><div class="muted">Son yedek ${days} gün önce, o zamandan beri ${S.settings.sinceBackup} yeni ziyaret.</div><button class="btn sm" style="margin-top:8px" data-act="go" data-p="backup">Yedek al</button></div>`;
+  }
+  h+=`<button class="btn full bigbtn" data-act="newVisitPick">+ Yeni ziyaret kaydı</button>`;
+  // aramalar
+  const calls=S.calls.filter(c=>!c.done&&c.tarih<=t).sort((a,b)=>a.tarih.localeCompare(b.tarih));
+  h+=section('📞 Aranacak hastalar',calls.map(c=>{
+    const p=patient(c.patientId),late=dayDiff(c.tarih,t);
+    return `<div class="card danger item"><div class="grow" data-act="go" data-p="patient" data-id="${c.patientId}"><b>${esc(pname(p))}</b><div class="muted">${late>0?late+' gün gecikti':'Bugün aranacak'} · ziyaret sonrası kontrol</div>${p&&p.tel?`<a class="tel" href="tel:${esc(p.tel)}" onclick="event.stopPropagation()">${esc(p.tel)}</a>`:''}</div><button class="btn sm grn" data-act="callDone" data-id="${c.id}">Arandı</button></div>`;
+  }));
+  // planlar
+  const plans=S.plans.filter(p=>!p.done).sort((a,b)=>(a.tarih+(a.saat||'')).localeCompare(b.tarih+(b.saat||'')));
+  const planRow=(p,cls,lab)=>`<div class="card ${cls} item"><div class="grow" data-act="go" data-p="patient" data-id="${p.patientId}"><b>${esc(pname(patient(p.patientId)))}</b> <span class="badge ${cls==='danger'?'red':''}">${lab}</span><div class="muted">${fd(p.tarih)} ${esc(p.saat||'')} · ${esc(p.islem||'')}</div></div><button class="btn sm" data-act="planDo" data-id="${p.id}">Ziyaret yaptım</button></div>`;
+  h+=section('⚠️ Yapılmamış planlar',plans.filter(p=>p.tarih<t).map(p=>planRow(p,'danger',dayDiff(p.tarih,t)+' gün geçti')));
+  h+=section('📅 Bugünün planları',plans.filter(p=>p.tarih===t).map(p=>planRow(p,'alert','bugün')));
+  h+=section('🗓 Önümüzdeki 7 gün',plans.filter(p=>p.tarih>t&&p.tarih<=addDays(t,7)).map(p=>planRow(p,'','+'+dayDiff(t,p.tarih)+' gün')));
+  // stok uyarıları
+  const low=S.stock.filter(i=>num(i.minAdet)>0&&num(i.adet)<=num(i.minAdet));
+  h+=section('📦 Azalan stok',low.map(i=>`<div class="card alert item" data-act="stockEdit" data-id="${i.id}"><div class="grow"><b>${esc(i.ad)}</b></div><div class="red"><b>${i.adet}</b> <span class="muted">/ uyarı ${i.minAdet}</span></div></div>`));
+  const exp=S.stock.filter(i=>i.skt&&num(i.adet)>0&&dayDiff(t,i.skt)<=num(S.settings.sktDays)).sort((a,b)=>a.skt.localeCompare(b.skt));
+  h+=section('⏳ Son kullanma tarihi',exp.map(i=>{const d=dayDiff(t,i.skt);return `<div class="card ${d<0?'danger':'alert'} item" data-act="stockEdit" data-id="${i.id}"><div class="grow"><b>${esc(i.ad)}</b><div class="muted">SKT ${fd(i.skt)} · ${i.adet} adet</div></div><span class="badge ${d<0?'red':'org'}">${d<0?'geçti':d+' gün'}</span></div>`;}));
+  // aylık özet
+  h+=`<h2>${MN[m]} ${y} özeti</h2><div class="card"><div class="row"><div><div class="muted">Ziyaret</div><div class="big">${st.n}</div></div><div><div class="muted">Alınan ücret</div><div class="big" style="font-size:20px">${money(st.ucret)}</div></div></div><div style="margin-top:8px" class="muted">Net kâr</div><div class="big ${st.net<0?'red':'grn'}">${money(st.net)}</div>${st.labBorc>0?`<div class="muted" style="margin-top:6px">Ödenmemiş laboratuvar borcu: ${money(st.labBorc)}</div>`:''}</div>`;
+  return {t:'Ana Sayfa',h};
+}
+
+function pPatients(){
+  return {t:'Hastalar',h:`<input id="ps_q" placeholder="🔍 İsim, TC veya telefon ara" autocomplete="off" style="margin-bottom:10px"><button class="btn full" data-act="patNew">+ Yeni hasta</button><div id="ps_l">${plist('','page')}</div>`};
+}
+
+function visitCard(v){
+  const c=visitCalc(v),nurse=isNurse(v);
+  const its=(v.items||[]).map(i=>`${esc(i.ad)} ×${i.adet}`).join(', ');
+  const ts=(v.tests||[]).map(t=>esc(t.ad)).join(', ');
+  const call=S.calls.find(x=>x.visitId===v.id&&x.done&&x.not);
+  return `<div class="card" data-act="visitEdit" data-id="${v.id}">
+  <div class="item"><div class="grow"><b>${fd(v.tarih)}</b> <span class="muted">${esc(v.saat||'')}</span> <span class="badge ${nurse?'org':''}">${nurse?'👩‍⚕️ '+esc(v.kimAd||'Hemşire'):'Ben'}</span>${v.eski?'<span class="badge">not defteri</span>':''}</div><div style="text-align:right"><b>${money(v.ucret)}</b></div></div>
+  <div class="muted">${esc((v.hizmetAd||[]).join(', ')||'—')}</div>
+  ${its?`<div class="muted">💊 ${its}${nurse?' (kayıt)':''}</div>`:''}${ts?`<div class="muted">🧪 ${ts}</div>`:''}
+  <div class="muted">Maliyet ${money(c.maliyet)} · Kâr <span class="${c.kar<0?'red':'grn'}">${money(c.kar)}</span>${c.borc>0?` · <span class="red">Kalan borç ${money(c.borc)}</span>`:''}</div>
+  ${v.sikayet?`<div class="muted">Şikâyet: ${esc(v.sikayet)}</div>`:''}${v.not?`<div class="muted">Not: ${esc(v.not)}</div>`:''}
+  ${call?`<div class="note">📞 Arama notu: ${esc(call.not)}</div>`:''}</div>`;
+}
+
+function pPatient(){
+  const p=patient(R.id);
+  if(!p)return {t:'Hasta',back:1,h:'<div class="empty">Hasta bulunamadı</div>'};
+  const vs=S.visits.filter(v=>v.patientId===p.id).sort((a,b)=>(b.tarih+(b.saat||'')).localeCompare(a.tarih+(a.saat||'')));
+  let ucret=0,mal=0,borc=0;vs.forEach(v=>{const c=visitCalc(v);ucret+=num(v.ucret);mal+=c.maliyet;borc+=c.borc;});
+  const a=ageOf(p.dogum);
+  let h=`<div class="card"><div class="item"><div class="grow"><b style="font-size:19px">${esc(pname(p))}</b><div class="muted">${a!==''?a+' yaş · ':''}${p.dogum?fd(p.dogum):''}</div>${p.tel?`<a class="tel" href="tel:${esc(p.tel)}">📞 ${esc(p.tel)}</a>`:''}</div></div>${p.not?`<div class="note">⚠️ ${esc(p.not)}</div>`:''}</div>`;
+  h+=`<div class="card sum"><table class="tb"><tr><td>Toplam ziyaret</td><td class="r">${vs.length}</td></tr><tr><td>Toplam ücret</td><td class="r">${money(ucret)}</td></tr><tr><td>Toplam maliyet</td><td class="r">${money(mal)}</td></tr><tr class="tot"><td>Kâr</td><td class="r ${ucret-mal<0?'red':'grn'}">${money(ucret-mal)}</td></tr><tr class="tot"><td>Kalan borç</td><td class="r ${borc>0?'red':''}">${money(borc)}</td></tr></table>${borc>0?`<button class="btn sm grn" style="margin-top:8px" data-act="pay" data-id="${p.id}">Ödeme al</button>`:''}</div>`;
+  h+=`<div class="row" style="margin-bottom:10px"><button class="btn" data-act="visitNew" data-id="${p.id}">+ Ziyaret</button><button class="btn gray" data-act="planNew" data-id="${p.id}">+ Plan</button></div>`;
+  const tabs=[['visits','Ziyaretler'],['plans','Planlar'],['files','Tahliller'],['info','Bilgiler']];
+  h+=`<div class="seg">${tabs.map(t=>`<button class="${P.tab===t[0]?'on':''}" data-act="ptab" data-t="${t[0]}">${t[1]}</button>`).join('')}</div>`;
+  if(P.tab==='visits')h+=vs.length?vs.map(visitCard).join(''):'<div class="empty">Henüz ziyaret yok</div>';
+  if(P.tab==='plans'){
+    const pl=S.plans.filter(x=>x.patientId===p.id).sort((a,b)=>b.tarih.localeCompare(a.tarih));
+    const cl=S.calls.filter(c=>c.patientId===p.id&&!c.done);
+    h+=cl.map(c=>`<div class="card danger item"><div class="grow"><b>📞 Hastayı ara</b><div class="muted">${fd(c.tarih)}</div></div><button class="btn sm grn" data-act="callDone" data-id="${c.id}">Arandı</button></div>`).join('');
+    h+=pl.length?pl.map(x=>`<div class="card item"><div class="grow" data-act="planEdit" data-id="${x.id}"><b>${fd(x.tarih)} ${esc(x.saat||'')}</b> ${x.done?'<span class="badge grn">yapıldı</span>':''}<div class="muted">${esc(x.islem||'')}</div></div>${x.done?'':`<button class="btn sm" data-act="planDo" data-id="${x.id}">Ziyaret yaptım</button>`}</div>`).join(''):'<div class="empty">Planlanan işlem yok</div>';
+  }
+  if(P.tab==='files'){
+    const fl=S.files.filter(f=>f.patientId===p.id).sort((a,b)=>b.tarih.localeCompare(a.tarih));
+    h+=`<button class="btn full" data-act="fileAdd" data-id="${p.id}">+ Tahlil fotoğrafı / PDF ekle</button><input type="file" id="fileIn" accept="image/*,application/pdf" multiple style="display:none">`;
+    h+=fl.length?fl.map(f=>`<div class="card item"><div class="grow" data-act="fileOpen" data-id="${f.id}"><b>${esc(f.ad)}</b><div class="muted">${fd(f.tarih)} · ${f.tip==='application/pdf'?'PDF':'Fotoğraf'}${f.not?' · '+esc(f.not):''}</div></div><button class="btn sm gray" data-act="fileEdit" data-id="${f.id}">Düzenle</button></div>`).join(''):'<div class="empty">Henüz tahlil dosyası yok</div>';
+  }
+  if(P.tab==='info'){
+    const row=(l,v)=>v?`<tr><td class="muted">${l}</td><td>${esc(v)}</td></tr>`:'';
+    h+=`<div class="card"><table class="tb">${row('Ad Soyad',pname(p))}${row('Doğum tarihi',fd(p.dogum))}${row('TC kimlik',p.tc)}${row('Telefon',p.tel)}${row('Adres',p.adres)}${row('Notlar',p.not)}</table></div><div class="row"><button class="btn" data-act="patEdit" data-id="${p.id}">Düzenle</button><button class="btn red" data-act="patDel" data-id="${p.id}">Hastayı sil</button></div>`;
+  }
+  return {t:pname(p),back:1,h};
+}
+
+/* ---------- Ziyaret formu ---------- */
+function newV(pid,o){
+  o=o||{};
+  return {patientId:pid,tarih:o.tarih||today(),saat:o.saat||nowTime(),kim:'ben',hizmetler:[],items:[],tests:[],hizmetBedeli:'',ucret:'',odenen:'',ucretAuto:true,odenenAuto:true,hemsireUcret:'',labOdendi:true,sikayet:'',olcum:'',kontrol:'',not:o.not||'',planId:o.planId||null};
+}
+function labActive(){return V.hizmetler.some(id=>{const s=S.services.find(x=>x.id===id);return s&&s.tip==='lab';});}
+function serumActive(){return V.hizmetler.some(id=>{const s=S.services.find(x=>x.id===id);return s&&s.tip==='serum';});}
+function autoUcret(){
+  let t=0;
+  V.hizmetler.forEach(id=>{const s=S.services.find(x=>x.id===id);if(s&&s.tip!=='lab')t+=num(s.ucret);});
+  if(labActive())t+=V.tests.reduce((a,x)=>a+num(x.satis),0)+num(V.hizmetBedeli);
+  return round2(t);
+}
+function chip(on,act,id,label,sub){return `<button class="chip ${on?'on':''}" data-act="${act}" data-id="${id}">${esc(label)}${sub!=null?`<small>${sub}</small>`:''}</button>`;}
+function pVisit(){
+  const p=patient(V.patientId),nurse=V.kim!=='ben';
+  let h=`<div class="card"><b>${esc(pname(p))}</b>
+  <div class="row"><label>Tarih<input type="date" data-v="tarih" value="${esc(V.tarih)}"></label><label>Saat<input type="time" data-v="saat" value="${esc(V.saat)}"></label></div>
+  <label>Kim yaptı?<select data-v="kim"><option value="ben">Ben</option>${S.nurses.map(n=>`<option value="${n.id}" ${V.kim===n.id?'selected':''}>${esc(n.ad)}</option>`).join('')}${nurse&&!S.nurses.some(n=>n.id===V.kim)?`<option value="${esc(V.kim)}" selected>${esc(V.kimAd||'Hemşire')}</option>`:''}</select></label>
+  ${nurse?'<div class="note">Hemşire gidiyor: ilaç/malzeme <b>depodan düşmez</b> ve maliyete eklenmez. Maliyet sadece hemşireye verdiğin ücrettir.</div>':''}</div>`;
+  h+=`<h2>Hizmetler</h2><div class="chips">${S.services.map(s=>chip(V.hizmetler.includes(s.id),'v-svc',s.id,s.ad)).join('')}</div>`;
+  const sr=S.stock.filter(i=>i.tip==='serum'),ilac=S.stock.filter(i=>i.tip==='ilac'),mal=S.stock.filter(i=>i.tip==='malzeme');
+  const has=id=>V.items.some(i=>i.id===id);
+  const sub=i=>nurse?null:i.adet;
+  if(serumActive())h+=`<h2>Serum türü</h2><div class="chips">${sr.map(i=>chip(has(i.id),'v-item',i.id,i.ad,sub(i))).join('')||'<span class="muted">Depoda serum yok</span>'}</div>`;
+  h+=`<h2>İlaçlar</h2><div class="chips">${ilac.map(i=>chip(has(i.id),'v-item',i.id,i.ad,sub(i))).join('')||'<span class="muted">Depo sayfasından ilaç ekle</span>'}</div>`;
+  h+=`<h2>Ek malzeme</h2><div class="chips">${mal.map(i=>chip(has(i.id),'v-item',i.id,i.ad,sub(i))).join('')}</div>`;
+  if(V.items.length){
+    h+=`<div class="card"><b>Kullanılanlar</b>${V.items.map(i=>`<div class="item" style="margin-top:8px"><div class="grow">${esc(i.ad)}<div class="muted">${nurse?'kayıt amaçlı':money(i.birim)+' / adet'}</div></div><div class="stepper"><button data-act="v-step" data-id="${i.id}" data-d="-1">−</button><b>${i.adet}</b><button data-act="v-step" data-id="${i.id}" data-d="1">+</button></div></div>`).join('')}</div>`;
+  }
+  if(labActive()){
+    h+=`<h2>Tahliller</h2><div class="chips">${S.tests.map(t=>chip(V.tests.some(x=>x.id===t.id),'v-test',t.id,t.ad,money(t.satis))).join('')||'<span class="muted">Lab sayfasından tahlil ekle</span>'}</div>
+    <div class="card"><label>Hizmet bedeli (bu hasta için, TL)<input data-v="hizmetBedeli" inputmode="decimal" value="${esc(ns(V.hizmetBedeli))}"></label>
+    <label class="chk"><input type="checkbox" data-v="labOdendi" ${V.labOdendi?'checked':''}> Laboratuvara ödendi</label></div>`;
+  }
+  h+=`<h2>Ücret</h2><div class="card">
+  <label>Alınan ücret (TL)<input id="v_ucret" data-v="ucret" inputmode="decimal" value="${esc(ns(V.ucret))}"></label>
+  <label>Ödenen (TL)<input id="v_odenen" data-v="odenen" inputmode="decimal" value="${esc(ns(V.odenen))}"></label>
+  ${nurse?`<label>Hemşireye verdiğim ücret (TL)<input data-v="hemsireUcret" inputmode="decimal" value="${esc(ns(V.hemsireUcret))}"></label>`:''}
+  ${V.eski?`<label>Maliyet (TL, eski kayıt)<input data-v="maliyet" inputmode="decimal" value="${esc(ns(V.maliyet))}"></label><div class="note">Not defterinden aktarılmış kayıt: maliyet elle yazılır, depodan düşmez.</div>`:''}</div>`;
+  h+=`<h2>Notlar</h2><div class="card"><label>Hastanın şikâyeti<input data-v="sikayet" value="${esc(V.sikayet)}"></label><label>Ölçümler (tansiyon, ateş, şeker...)<input data-v="olcum" value="${esc(V.olcum)}"></label><label>Kontrol tarihi (plan olarak eklenir)<input type="date" data-v="kontrol" value="${esc(V.kontrol)}"></label><label>Not<textarea data-v="not" rows="2">${esc(V.not)}</textarea></label></div>`;
+  h+=`<div class="card sum" id="vsum"></div><div class="row"><button class="btn gray" data-act="back">Vazgeç</button><button class="btn" data-act="v-save">Kaydet</button></div>${V.id?'<button class="btn red full" style="margin-top:10px" data-act="v-del">Bu ziyareti sil</button>':''}`;
+  return {t:V.id?'Ziyareti düzenle':'Yeni ziyaret',back:1,h};
+}
+function vRefresh(){
+  if(!V)return;
+  if(V.ucretAuto){V.ucret=autoUcret();const e=$('#v_ucret');if(e)e.value=ns(V.ucret);}
+  if(V.odenenAuto){V.odenen=V.ucret;const e=$('#v_odenen');if(e)e.value=ns(V.odenen);}
+  const c=visitCalc(V),el=$('#vsum');
+  if(el)el.innerHTML=`<table class="tb"><tr><td>Alınan ücret</td><td class="r">${money(V.ucret)}</td></tr><tr class="sub"><td>İlaç ve malzeme</td><td class="r">${money(c.itemCost)}</td></tr><tr class="sub"><td>Laboratuvar</td><td class="r">${money(c.labCost)}</td></tr><tr class="sub"><td>Hemşire ücreti</td><td class="r">${money(c.nurseFee)}</td></tr>${V.eski?`<tr class="sub"><td>Eski kayıt maliyeti</td><td class="r">${money(c.eski)}</td></tr>`:''}<tr class="tot"><td>Maliyet</td><td class="r">${money(c.maliyet)}</td></tr><tr class="tot"><td>Kâr</td><td class="r ${c.kar<0?'red':'grn'}">${money(c.kar)}</td></tr>${c.borc>0?`<tr class="tot"><td>Kalan borç</td><td class="r red">${money(c.borc)}</td></tr>`:''}</table>`;
+}
+function vInput(t){
+  const k=t.dataset.v;V[k]=t.type==='checkbox'?t.checked:t.value;
+  if(k==='ucret')V.ucretAuto=false;
+  if(k==='odenen')V.odenenAuto=false;
+  vRefresh();
+}
+function addMalz(s,sign){
+  (s.malz||[]).forEach(m=>{
+    const st=S.stock.find(x=>x.id===m.id);if(!st)return;
+    const it=V.items.find(i=>i.id===m.id);
+    if(sign>0){if(it)it.adet+=num(m.adet);else V.items.push({id:st.id,ad:st.ad,tip:st.tip,adet:num(m.adet),birim:num(st.birim)});}
+    else if(it){it.adet-=num(m.adet);if(it.adet<=0)V.items=V.items.filter(x=>x!==it);}
+  });
+}
+function deleteVisitData(v){
+  applyStock(v,+1);
+  S.visits=S.visits.filter(x=>x.id!==v.id);
+  S.calls=S.calls.filter(c=>!(c.visitId===v.id&&!c.done));
+  S.plans=S.plans.filter(p=>!(p.fromVisit===v.id&&!p.done));
+}
+
+/* ---------- Depo ---------- */
+function pStock(){
+  const groups=[['serum','Serumlar'],['ilac','İlaçlar'],['malzeme','Malzemeler']];
+  const total=S.stock.reduce((a,i)=>a+Math.max(0,num(i.adet))*num(i.birim),0);
+  const t=today();
+  let h=`<div class="card"><div class="muted">Toplam stok değeri</div><div class="big">${money(total)}</div></div><button class="btn full" data-act="stockNew">+ Yeni kalem ekle</button>`;
+  groups.forEach(([k,l])=>{
+    const L=S.stock.filter(i=>i.tip===k).sort((a,b)=>a.ad.localeCompare(b.ad,'tr'));
+    h+=`<h2>${l}</h2>`;
+    if(!L.length)h+='<div class="empty">Henüz yok</div>';
+    L.forEach(i=>{
+      const low=num(i.minAdet)>0&&num(i.adet)<=num(i.minAdet);
+      const d=i.skt?dayDiff(t,i.skt):null;
+      h+=`<div class="card item"><div class="grow" data-act="stockEdit" data-id="${i.id}"><b>${esc(i.ad)}</b>${low?'<span class="badge red">azalıyor</span>':''}${d!=null&&d<0?'<span class="badge red">SKT geçti</span>':(d!=null&&d<=num(S.settings.sktDays)?'<span class="badge org">SKT yakın</span>':'')}<div class="muted">Birim ${money(i.birim)} · SKT ${i.skt?fd(i.skt):'—'}</div><div class="muted">Değer ${money(Math.max(0,num(i.adet))*num(i.birim))}</div></div><div class="qty"><div class="${low||num(i.adet)<0?'red':''}">${i.adet}</div><button class="btn sm" data-act="stockAdd" data-id="${i.id}">+ Ekle</button></div></div>`;
+    });
+  });
+  return {t:'Depo',h};
+}
+function stockForm(i){
+  openForm({
+    title:i?'Kalemi düzenle':'Yeni kalem',
+    note:i?'Birim maliyeti değiştirirsen yeni fiyat sadece <b>bundan sonraki ziyaretlere</b> uygulanır. Eski ziyaretler değişmez.':'',
+    fields:[
+      {k:'ad',label:'Ad',value:i&&i.ad},
+      {k:'tip',label:'Tür',type:'select',options:[['ilac','İlaç'],['serum','Serum'],['malzeme','Malzeme']],value:i?i.tip:'ilac'},
+      {k:'adet',label:i?'Elimdeki adet (düzeltme)':'Elimdeki adet',type:'num',value:i?ns(i.adet):'0'},
+      {k:'birim',label:'Birim maliyet (TL)',type:'num',value:i?ns(i.birim):''},
+      {k:'minAdet',label:'Azalma uyarısı (bu adetin altına inince uyar, boş = uyarma)',type:'num',value:i?ns(i.minAdet||''):''},
+      {k:'skt',label:'Son kullanma tarihi',type:'date',value:i&&i.skt}
+    ],
+    onDelete:i?()=>{if(!confirm('Bu kalem silinsin mi? Eski ziyaret kayıtları etkilenmez.'))return;S.stock=S.stock.filter(x=>x.id!==i.id);S.services.forEach(s=>s.malz=s.malz.filter(m=>m.id!==i.id));save();closeModal();render(true);}:null,
+    onSave:v=>{
+      if(!v.ad){toast('Ad yazmalısın');return false;}
+      const o={ad:v.ad,tip:v.tip,adet:num(v.adet),birim:num(v.birim),minAdet:num(v.minAdet),skt:v.skt};
+      if(i)Object.assign(i,o);else S.stock.push(Object.assign({id:uid()},o));
+      save();render(true);
+    }
+  });
+}
+function stockAddForm(i){
+  openForm({
+    title:'Stok ekle: '+i.ad,
+    note:`Şu an elinde <b>${i.adet}</b> adet var, birim maliyet ${money(i.birim)}.`,
+    fields:[
+      {k:'adet',label:'Eklenecek adet',type:'num',value:''},
+      {k:'tutar',label:'Toplam ödediğim tutar (TL)',type:'num',value:''},
+      {k:'guncelle',label:'Birim maliyeti güncelle (tutar ÷ adet)',type:'check',value:true},
+      {k:'skt',label:'Son kullanma tarihi (boşsa değişmez)',type:'date',value:''}
+    ],
+    onSave:v=>{
+      const a=num(v.adet),t=num(v.tutar);
+      if(a<=0){toast('Adet yazmalısın');return false;}
+      i.adet=round2(num(i.adet)+a);
+      if(t>0&&v.guncelle)i.birim=round2(t/a);
+      if(v.skt)i.skt=v.skt;
+      if(t>0)S.purchases.push({id:uid(),tarih:today(),itemId:i.id,ad:i.ad,adet:a,tutar:t});
+      save();render(true);toast('Stok eklendi');
+    }
+  });
+}
+
+/* ---------- Laboratuvar ---------- */
+function pLab(){
+  const L=S.tests.slice().sort((a,b)=>a.ad.localeCompare(b.ad,'tr'));
+  let h=`<div class="note">Tahlil fiyatını değiştirirsen sadece sonraki ziyaretlere uygulanır, eski kayıtlar değişmez.</div><button class="btn full" data-act="testNew">+ Yeni tahlil</button>`;
+  h+=L.length?L.map(t=>`<div class="card item" data-act="testEdit" data-id="${t.id}"><div class="grow"><b>${esc(t.ad)}</b><div class="muted">Laboratuvara ${money(t.maliyet)} · Satış ${money(t.satis)}</div></div><div class="grn"><b>${money(num(t.satis)-num(t.maliyet))}</b></div></div>`).join(''):'<div class="empty">Henüz tahlil yok. Örnek: Tam kan sayımı, maliyet 100, satış 600.</div>';
+  return {t:'Laboratuvar',h};
+}
+function testForm(t){
+  openForm({
+    title:t?'Tahlili düzenle':'Yeni tahlil',
+    fields:[{k:'ad',label:'Tahlil adı',value:t&&t.ad},{k:'maliyet',label:'Laboratuvara ödediğim (TL)',type:'num',value:t&&ns(t.maliyet)},{k:'satis',label:'Hastaya satış fiyatı (TL)',type:'num',value:t&&ns(t.satis)}],
+    onDelete:t?()=>{if(!confirm('Tahlil silinsin mi? Eski kayıtlar etkilenmez.'))return;S.tests=S.tests.filter(x=>x.id!==t.id);save();closeModal();render(true);}:null,
+    onSave:v=>{
+      if(!v.ad){toast('Tahlil adı yaz');return false;}
+      const o={ad:v.ad,maliyet:num(v.maliyet),satis:num(v.satis)};
+      if(t)Object.assign(t,o);else S.tests.push(Object.assign({id:uid()},o));
+      save();render(true);
+    }
+  });
+}
+
+/* ---------- Maliye ---------- */
+function breakdown(s){
+  const r=(l,v,c)=>`<tr class="${c||''}"><td>${l}</td><td class="r">${v}</td></tr>`;
+  let h='<table class="tb">';
+  h+=r('Ziyaret sayısı',s.n);
+  h+=r('Alınan ücret',money(s.ucret));
+  h+=r('&nbsp;&nbsp;Tahsil edilen',money(s.odenen),'sub');
+  h+=r('&nbsp;&nbsp;Kalan borç (alacak)',money(s.borc),'sub');
+  h+=r('Maliyetler','','hd');
+  h+=r('İlaç ve malzeme (kullanılan)',money(s.ilac));
+  h+=r('Laboratuvar gideri',money(s.lab));
+  h+=r('Hemşire ödemeleri',money(s.hems));
+  if(s.eski>0)h+=r('Eski kayıtlar (not defterinden)',money(s.eski));
+  allCats().forEach(c=>{h+=r(esc(c),money(s.gc[c]||0));});
+  h+=r('Toplam maliyet',money(s.tmal),'tot');
+  h+=r('Net kâr',money(s.net),'tot '+(s.net<0?'red':'grn'));
+  h+=r('Karşılaştırma','','hd');
+  h+=r('Satın alınan ilaç/malzeme',money(s.alim));
+  h+=r('Ödenmemiş laboratuvar borcu',money(s.labBorc));
+  return h+'</table>';
+}
+function nurseStats(y,m){
+  const inP=d=>{const yy=+d.slice(0,4),mm=+d.slice(5,7)-1;return yy===y&&(m==null||mm===m);};
+  const o={};
+  S.visits.filter(v=>isNurse(v)&&inP(v.tarih)).forEach(v=>{
+    const n=o[v.kim]||(o[v.kim]={ad:(S.nurses.find(x=>x.id===v.kim)||{}).ad||v.kimAd||'Hemşire',n:0,t:0});
+    n.n++;n.t+=num(v.hemsireUcret);
+  });
+  return Object.values(o);
+}
+function pFin(){
+  const cy=new Date().getFullYear();
+  const ys=new Set([cy]);S.visits.forEach(v=>ys.add(+v.tarih.slice(0,4)));S.expenses.forEach(e=>ys.add(+e.tarih.slice(0,4)));
+  const y=R.year||cy;ys.add(y);
+  const rows=MN.map((n,i)=>periodStats(y,i)),tot=periodStats(y,null);
+  const mx=Math.max(1,...rows.map(r=>Math.abs(r.net)));
+  let h=`<label style="margin-top:0">Yıl<select id="finyear">${[...ys].sort((a,b)=>b-a).map(v=>`<option ${v===y?'selected':''}>${v}</option>`).join('')}</select></label>`;
+  h+=`<h2>Aylar (satıra dokun)</h2><div class="card"><table class="tb"><tr><th>Ay</th><th class="r">Ziy.</th><th class="r">Ücret</th><th class="r">Maliyet</th><th class="r">Net kâr</th></tr>${rows.map((r,i)=>`<tr class="click" data-act="monthDetail" data-m="${i}"><td>${MN[i]}</td><td class="r">${r.n}</td><td class="r">${money(r.ucret)}</td><td class="r">${money(r.tmal)}</td><td class="r ${r.net<0?'red':''}"><b>${money(r.net)}</b></td></tr>`).join('')}<tr class="tot"><td>${y}</td><td class="r">${tot.n}</td><td class="r">${money(tot.ucret)}</td><td class="r">${money(tot.tmal)}</td><td class="r ${tot.net<0?'red':'grn'}">${money(tot.net)}</td></tr></table></div>`;
+  h+=`<h2>Aylık net kâr</h2><div class="card"><div class="chart">${rows.map((r,i)=>{const ht=Math.round(Math.abs(r.net)/mx*56);return `<div class="col"><div class="up">${r.net>0?`<i style="height:${Math.max(ht,2)}px"></i>`:''}</div><div class="dn">${r.net<0?`<i class="neg" style="height:${Math.max(ht,2)}px"></i>`:''}</div><small>${MS[i]}</small></div>`;}).join('')}</div></div>`;
+  h+=`<h2>${y} yıllık özet</h2><div class="card">${breakdown(tot)}</div>`;
+  const ns_=nurseStats(y,null);
+  h+=`<h2>Hemşire ödemeleri (${y})</h2><div class="card">${ns_.length?`<table class="tb"><tr><th>Hemşire</th><th class="r">Ziyaret</th><th class="r">Ödenen</th></tr>${ns_.map(n=>`<tr><td>${esc(n.ad)}</td><td class="r">${n.n}</td><td class="r">${money(n.t)}</td></tr>`).join('')}</table>`:'<div class="empty">Hemşire ziyareti yok</div>'}</div>`;
+  const lb=S.visits.filter(v=>visitCalc(v).labCost>0&&!v.labOdendi).sort((a,b)=>a.tarih.localeCompare(b.tarih));
+  if(lb.length)h+=`<h2>Ödenmemiş laboratuvar</h2>${lb.map(v=>`<div class="card item"><div class="grow"><b>${esc(pname(patient(v.patientId)))}</b><div class="muted">${fd(v.tarih)} · ${money(visitCalc(v).labCost)}</div></div><button class="btn sm grn" data-act="labPaid" data-id="${v.id}">Ödendi</button></div>`).join('')}`;
+  h+=`<button class="btn full gray" style="margin-top:12px" data-act="csv">📄 ${y} tablosunu Excel (CSV) olarak al</button>`;
+  return {t:'Maliye',h};
+}
+function monthDetail(m){
+  const y=R.year||new Date().getFullYear();
+  const s=periodStats(y,m);
+  const vs=S.visits.filter(v=>+v.tarih.slice(0,4)===y&&+v.tarih.slice(5,7)-1===m).sort((a,b)=>a.tarih.localeCompare(b.tarih));
+  const nsx=nurseStats(y,m);
+  modal(`<h3>${MN[m]} ${y}</h3>${breakdown(s)}${nsx.length?`<h2>Hemşireler</h2><table class="tb">${nsx.map(n=>`<tr><td>${esc(n.ad)}</td><td class="r">${n.n} ziyaret</td><td class="r">${money(n.t)}</td></tr>`).join('')}</table>`:''}<h2>Ziyaretler</h2>${vs.length?`<table class="tb">${vs.map(v=>{const c=visitCalc(v);return `<tr><td>${fd(v.tarih).slice(0,5)}</td><td>${esc(pname(patient(v.patientId)))}</td><td class="r">${money(v.ucret)}</td><td class="r ${c.kar<0?'red':'grn'}">${money(c.kar)}</td></tr>`;}).join('')}</table>`:'<div class="empty">Ziyaret yok</div>'}<div class="btns"><button class="btn" data-act="m-close">Kapat</button></div>`);
+}
+function csvYear(y){
+  const cats=allCats();
+  const head=['Ay','Ziyaret','Alınan ücret','Tahsil edilen','İlaç-malzeme','Laboratuvar','Hemşire','Eski kayıt maliyeti',...cats,'Toplam maliyet','Net kâr','Stok alımı'];
+  const f=n=>String(round2(n)).replace('.',',');
+  const line=(lab,s)=>[lab,s.n,f(s.ucret),f(s.odenen),f(s.ilac),f(s.lab),f(s.hems),f(s.eski),...cats.map(c=>f(s.gc[c]||0)),f(s.tmal),f(s.net),f(s.alim)];
+  const rows=[head,...MN.map((n,i)=>line(n,periodStats(y,i))),line('TOPLAM '+y,periodStats(y,null))];
+  return '﻿'+rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(';')).join('\r\n');
+}
+
+/* ---------- Giderler ---------- */
+function pExpenses(){
+  const cy=new Date().getFullYear(),y=R.year||cy;
+  const ys=new Set([cy,y]);S.expenses.forEach(e=>ys.add(+e.tarih.slice(0,4)));
+  const L=S.expenses.filter(e=>+e.tarih.slice(0,4)===y).sort((a,b)=>b.tarih.localeCompare(a.tarih));
+  const tot=L.reduce((a,e)=>a+num(e.tutar),0);
+  let h=`<div class="note">İlaç ve sarf malzeme alımlarını buraya yazma. Onlar <b>Depo → Stok ekle</b> ile girilir. Aksi halde aynı para iki kez sayılır. Laboratuvar ve hemşire ücretleri ziyaretlerden otomatik gelir.</div><div class="row"><button class="btn" data-act="expNew">+ Gider ekle</button><button class="btn gray" data-act="catNew">+ Kategori</button></div><label>Yıl<select id="expyear">${[...ys].sort((a,b)=>b-a).map(v=>`<option ${v===y?'selected':''}>${v}</option>`).join('')}</select></label><div class="card" style="margin-top:10px"><div class="muted">${y} toplam gider</div><div class="big">${money(tot)}</div></div>`;
+  h+=L.length?L.map(e=>`<div class="card item" data-act="expEdit" data-id="${e.id}"><div class="grow"><b>${esc(e.kategori)}</b><div class="muted">${fd(e.tarih)}${e.aciklama?' · '+esc(e.aciklama):''}</div></div><b>${money(e.tutar)}</b></div>`).join(''):'<div class="empty">Bu yıl gider yok</div>';
+  return {t:'Giderler',back:1,h};
+}
+function expForm(e){
+  openForm({
+    title:e?'Gideri düzenle':'Yeni gider',
+    fields:[{k:'tarih',label:'Tarih',type:'date',value:e?e.tarih:today()},{k:'kategori',label:'Kategori',type:'select',options:allCats().map(c=>[c,c]),value:e?e.kategori:allCats()[0]},{k:'tutar',label:'Tutar (TL)',type:'num',value:e&&ns(e.tutar)},{k:'aciklama',label:'Açıklama (isteğe bağlı)',value:e&&e.aciklama}],
+    onDelete:e?()=>{if(!confirm('Gider silinsin mi?'))return;S.expenses=S.expenses.filter(x=>x.id!==e.id);save();closeModal();render(true);}:null,
+    onSave:v=>{
+      if(!v.tarih||num(v.tutar)<=0){toast('Tarih ve tutar gerekli');return false;}
+      const o={tarih:v.tarih,kategori:v.kategori,tutar:num(v.tutar),aciklama:v.aciklama};
+      if(e)Object.assign(e,o);else S.expenses.push(Object.assign({id:uid()},o));
+      save();render(true);
+    }
+  });
+}
+
+/* ---------- Hemşireler ---------- */
+function pNurses(){
+  const y=new Date().getFullYear();
+  const st=nurseStats(y,null);
+  let h=`<button class="btn full" data-act="nurseNew">+ Hemşire ekle</button>`;
+  h+=S.nurses.length?S.nurses.map(n=>{const s=st.find(x=>x.ad===n.ad)||{n:0,t:0};return `<div class="card item" data-act="nurseEdit" data-id="${n.id}"><div class="grow"><b>${esc(n.ad)}</b><div class="muted">${y}: ${s.n} ziyaret · ${money(s.t)}</div></div><div class="muted">›</div></div>`;}).join(''):'<div class="empty">Henüz hemşire yok</div>';
+  return {t:'Hemşireler',back:1,h};
+}
+function nurseForm(n){
+  openForm({title:n?'Hemşireyi düzenle':'Yeni hemşire',fields:[{k:'ad',label:'Ad Soyad',value:n&&n.ad}],
+    onDelete:n?()=>{if(!confirm('Hemşire silinsin mi? Eski ziyaret kayıtları adıyla kalır.'))return;S.nurses=S.nurses.filter(x=>x.id!==n.id);save();closeModal();render(true);}:null,
+    onSave:v=>{if(!v.ad){toast('Ad yaz');return false;}if(n)n.ad=v.ad;else S.nurses.push({id:uid(),ad:v.ad});save();render(true);}});
+}
+
+/* ---------- Hizmetler ---------- */
+const TIPL={normal:'Normal hizmet',serum:'Serum (serum türü seçimi açılır)',lab:'Laboratuvar (tahlil seçimi açılır)'};
+function pServices(){
+  let h=`<div class="note">Hizmet seçilince listedeki malzemeler ziyarete otomatik eklenir, maliyete yazılır ve depodan düşer.</div><button class="btn full" data-act="svcNew">+ Yeni hizmet</button>`;
+  h+=S.services.map(s=>`<div class="card item" data-act="svcEdit" data-id="${s.id}"><div class="grow"><b>${esc(s.ad)}</b><div class="muted">${TIPL[s.tip]||''}${num(s.ucret)?' · varsayılan '+money(s.ucret):''}</div><div class="muted">${(s.malz||[]).map(m=>{const i=S.stock.find(x=>x.id===m.id);return i?esc(i.ad)+' ×'+m.adet:'';}).filter(Boolean).join(', ')||'Otomatik malzeme yok'}</div></div><div class="muted">›</div></div>`).join('');
+  return {t:'Hizmetler',back:1,h};
+}
+function svcSync(){
+  if(!SD||!$('#sv_ad'))return;
+  SD.ad=$('#sv_ad').value;SD.tip=$('#sv_tip').value;SD.ucret=$('#sv_uc').value;
+}
+function svcRender(){
+  const opts=S.stock.filter(i=>!SD.malz.some(m=>m.id===i.id)).map(i=>`<option value="${i.id}">${esc(i.ad)}</option>`).join('');
+  modal(`<h3>${SD.id?'Hizmeti düzenle':'Yeni hizmet'}</h3>
+  <label>Hizmet adı<input id="sv_ad" value="${esc(SD.ad)}"></label>
+  <label>Türü<select id="sv_tip">${Object.keys(TIPL).map(k=>`<option value="${k}" ${SD.tip===k?'selected':''}>${TIPL[k]}</option>`).join('')}</select></label>
+  <label>Varsayılan ücret (TL, ziyarette değiştirilebilir)<input id="sv_uc" inputmode="decimal" value="${esc(ns(SD.ucret))}"></label>
+  <h2>Otomatik düşen malzemeler</h2>
+  ${SD.malz.map((m,ix)=>{const i=S.stock.find(x=>x.id===m.id);return i?`<div class="item" style="margin-bottom:8px"><div class="grow">${esc(i.ad)}</div><div class="stepper"><button data-act="sv-step" data-ix="${ix}" data-d="-1">−</button><b>${m.adet}</b><button data-act="sv-step" data-ix="${ix}" data-d="1">+</button></div></div>`:'';}).join('')||'<div class="muted">Yok</div>'}
+  ${opts?`<div class="row" style="margin-top:8px"><select id="sv_pick">${opts}</select><button class="btn sm gray" style="flex:0 0 auto" data-act="sv-add">Ekle</button></div>`:''}
+  <div class="btns">${SD.id?'<button class="btn red" data-act="sv-del">Sil</button>':''}<button class="btn gray" data-act="m-close">Vazgeç</button><button class="btn" data-act="sv-save">Kaydet</button></div>`);
+}
+
+/* ---------- Notlardan içe aktarma ---------- */
+let IM={text:'',items:null,cmp:null};
+const SERV_RX=/^(serum|kan\b|enj|i[ğg]ne\b|pansuman|sonda|lavman|nebul|tansiyon|şeker|ateş|aşı|ekg|ecg|oksijen|dikiş|sütür|damar)/i;
+const DATE_RX=/^(\d{1,2})\.(\d{1,2})\.(\d{4})\.?\s*(?:-\s*)?(?:(\d{1,2})[.:](\d{2}))?\s*(?:[✅✔✓]️?)?$/;
+const PHONE_RX=/(?<!\d)0?5\d{2}[\s.-]?\d{3}[\s.-]?\d{2}[\s.-]?\d{2}(?!\d)/;
+const UC_RX=/al[ıiIİ]nan\s*[üuÜU]cret\s*[-:–]?\s*([\d.,]*\d)/i;
+const MAL_RX=/^mal[iıİI]yet\s*[-:–]?\s*([\d.,]*\d)/i;
+const STOP_RX=/^(toplam\b|g[iİıI]der\s+tablosu|genel\s+toplam)/i;
+const cap=s=>s?s.charAt(0).toLocaleUpperCase('tr')+s.slice(1).toLocaleLowerCase('tr'):s;
+const tail10=t=>String(t||'').replace(/\D/g,'').slice(-10);
+const ALIAS={bemix:'Bemiks'};
+function splitName(n){
+  n=String(n||'').replace(/([a-zçğıöşü])([A-ZÇĞİÖŞÜ])/g,'$1 $2').replace(/\s+/g,' ').trim();
+  if(!n)return {ad:'',soyad:''};
+  const w=n.split(' ');
+  if(w.length===1||/^\(/.test(w[w.length-1]))return {ad:n,soyad:''};
+  return {ad:w.slice(0,-1).join(' '),soyad:w[w.length-1]};
+}
+function parsePerson(line){
+  let s=line.replace(/ /g,' '),tc='',tel='';
+  s=s.replace(/t\.?\s?c\.?\s*(?:kimlik)?\s*(?:no)?\s*[:.]?\s*(\d{11})/i,(m,d)=>{tc=d;return ' ';});
+  s=s.replace(PHONE_RX,m=>{tel=m.replace(/\D/g,'');return ' ';});
+  if(tel.length===10)tel='0'+tel;
+  s=s.replace(/\s+/g,' ').trim().replace(/^[-–.:\s]+|[-–.:\s]+$/g,'');
+  return Object.assign(splitName(s),{tel,tc});
+}
+function normDrug(n){
+  n=n.replace(/[.,;:]+$/,'').replace(/\s+/g,' ').trim();
+  if(!n)return '';
+  const a=ALIAS[lc(n)];return a||cap(n);
+}
+function splitSp(p){
+  if(/^(ringer|izotonik|dekstroz|izolen|sarı|mor|kırmızı|mavi|yeşil)\b/i.test(p)||/\s\d+(\s|$)/.test(p))return [p];
+  return p.split(/\s+/);
+}
+function parseItems(rest,serum){
+  const s=rest.replace(/\*+/g,' ').replace(/;+/g,',');
+  let parts=s.split(',');
+  if(serum){
+    parts=parts.flatMap(p=>splitSp(p.trim()));
+    const out=[];parts.forEach(p=>{if(/^[x×]\s*\d+$/i.test(p)&&out.length)out[out.length-1]+=p;else if(p)out.push(p);});
+    parts=out;
+  }
+  const items=[];
+  parts.forEach(p=>{
+    p=p.trim().replace(/\.+$/,'');if(!p)return;
+    let adet=1,name=p,m;
+    if((m=p.match(/^(.+?)\s*(\d+)\s*\/\s*(\d+)$/))){name=m[1];adet=round2(+m[2]/+m[3]);}
+    else if((m=p.match(/^(.+?)\s*[x×]\s*(\d+)$/i))){name=m[1];adet=+m[2];}
+    name=normDrug(name);if(!name)return;
+    const ex=items.find(i=>lc(i.ad)===lc(name));
+    if(ex)ex.adet=round2(ex.adet+adet);else items.push({ad:name,adet});
+  });
+  return items;
+}
+function parseService(L){
+  let name,rest;
+  const ti=L.indexOf('\t');
+  if(ti>0){name=L.slice(0,ti).trim();rest=L.slice(ti+1).trim();}
+  else{const m=L.match(/^(serum(?:\s*x\s*\d+)?(?:\s*\([^)]*\))?|kan\s*alma|\S+)\s*(.*)$/i);name=m[1];rest=m[2];}
+  const serum=/^serum/i.test(name);
+  let count=1;const cm=name.match(/x\s*(\d+)/i);if(serum&&cm)count=+cm[1];
+  const pm=name.match(/\(([^)]*)\)/);
+  const base=serum?'Serum':/^kan\s*alma/i.test(name)?'Kan alma':cap(name.replace(/\([^)]*\)/g,'').replace(/x\s*\d+/i,'').trim());
+  return {base,count,note:pm?pm[1].trim():'',items:parseItems(rest,serum)};
+}
+function costLine(L){
+  let m;
+  if((m=L.match(MAL_RX)))return {k:'m',v:num(m[1])};
+  if((m=L.match(/^al[ıiIİ]nan\s*[üuÜU]cret\s*[-:–]?\s*([\d.,]*\d)/i)))return {k:'u',v:num(m[1])};
+  if((m=L.match(/^k[aâ]r\s*[-:–]\s*([\d.,]*\d)/i)))return {k:'kar',v:num(m[1])};
+  return null;
+}
+function matchPatient(x){
+  const t=tail10(x.tel),nm=lc(((x.ad||'')+' '+(x.soyad||'')).trim());
+  return S.patients.find(p=>t&&tail10(p.tel)===t)||S.patients.find(p=>x.tc&&p.tc===x.tc)||S.patients.find(p=>nm&&lc(pname(p))===nm)||null;
+}
+function parseNotes(text){
+  const lines=text.replace(/\r/g,'').replace(/ /g,' ').split('\n').map(l=>l.trim()).filter(Boolean);
+  const groups=[];let g=null,ses=null,per=null,skip=false,sec=null;
+  const totals={u:0,m:0,found:false};
+  const flush=()=>{if(sec){totals.u+=sec.u||0;totals.m+=sec.m||0;totals.found=true;sec=null;}};
+  const newG=()=>{g={sessions:[],costs:{},closed:false};groups.push(g);ses=null;per=null;};
+  for(let i=0;i<lines.length;i++){
+    const L=lines[i],nx=lines[i+1]||'';
+    const dm=L.match(DATE_RX);
+    if(skip){
+      if(!dm){
+        let x;
+        if(sec.u==null&&(x=L.match(UC_RX)))sec.u=num(x[1]);
+        if(sec.m==null&&(x=L.match(MAL_RX)))sec.m=num(x[1]);
+        continue;
+      }
+      flush();skip=false;
+    }else if(STOP_RX.test(L)){skip=true;sec={u:null,m:null};g=null;ses=null;per=null;continue;}
+    if(dm){
+      if(!g||g.closed)newG();
+      const d={d:+dm[1],m:+dm[2],y:+dm[3],t:dm[4]!=null?pad(+dm[4])+':'+dm[5]:''};
+      if(!ses||ses.persons.length){ses={dates:[],persons:[]};g.sessions.push(ses);}
+      ses.dates.push(d);per=null;continue;
+    }
+    const mc=costLine(L);
+    if(mc){if(!g)newG();g.costs[mc.k]=mc.v;g.closed=true;per=null;continue;}
+    if(PHONE_RX.test(L)||(SERV_RX.test(nx)&&!SERV_RX.test(L))){
+      if(!g||g.closed)newG();
+      if(!ses){ses={dates:[],persons:[]};g.sessions.push(ses);}
+      per=Object.assign(parsePerson(L),{svc:null,addr:[]});
+      ses.persons.push(per);continue;
+    }
+    if(per){if(!per.svc)per.svc=parseService(L);else per.addr.push(L);continue;}
+  }
+  flush();
+  const out=[];
+  groups.forEach(gr=>{
+    const vs=[];
+    gr.sessions.forEach(s=>{const dates=s.dates.length?s.dates:[null];s.persons.forEach(p=>dates.forEach(d=>vs.push({d,p})));});
+    const N=vs.length;if(!N)return;
+    const U=gr.costs.u,M=gr.costs.m;
+    const share=(T,i)=>T==null?0:(i<N-1?round2(T/N):round2(T-round2(T/N)*(N-1)));
+    vs.forEach((e,i)=>{
+      const d=e.d,p=e.p,sv=p.svc||{base:'',count:1,note:'',items:[]};
+      const w=[],n=[];let tarih='',saat='';
+      if(!d)w.push({k:'t',m:'Tarih yok'});
+      else{
+        const dt=new Date(d.y,d.m-1,d.d);
+        if(dt.getFullYear()===d.y&&dt.getMonth()===d.m-1&&dt.getDate()===d.d){tarih=ymd(dt);saat=d.t;}
+        else w.push({k:'t',m:'Tarih geçersiz ('+d.d+'.'+d.m+'.'+d.y+')'});
+      }
+      if(!p.ad)w.push({k:'a',m:'İsim yok'});
+      if(p.tc&&!validTC(p.tc))n.push('TC geçersiz görünüyor');
+      if(U==null)n.push('Ücret yazılmamış');
+      if(N>1)n.push('Ücret ve maliyet '+N+' ziyarete bölündü');
+      if(!sv.base)n.push('Hizmet satırı yok');
+      const items=sv.items.map(it=>{
+        const st=S.stock.find(s=>lc(s.ad)===lc(it.ad))||S.stock.find(s=>lc(s.ad).startsWith(lc(it.ad)));
+        return {id:st?st.id:'x'+uid(),ad:st?st.ad:it.ad,tip:st?st.tip:'ilac',adet:it.adet,birim:0};
+      });
+      const svc=sv.base==='Serum'?S.services.find(s=>s.tip==='serum'):S.services.find(s=>lc(s.ad)===lc(sv.base));
+      out.push({include:false,w,n,tarih,saat,ad:p.ad,soyad:p.soyad,tel:p.tel,tc:p.tc,adres:p.addr.join(' '),
+        hizmetler:svc?[svc.id]:[],hizmetAd:sv.base?[sv.base+(sv.count>1?' ×'+sv.count:'')]:[],items,sikayet:sv.note,
+        ucret:share(U,i),maliyet:share(M,i),mark:''});
+    });
+  });
+  // komşu tarihlerle tutarsız olanları işaretle
+  const ym=x=>x.tarih?(+x.tarih.slice(0,4))*12+(+x.tarih.slice(5,7)):null;
+  out.forEach((x,i)=>{
+    const a=ym(x);if(a==null)return;
+    const nb=[];
+    for(let j=Math.max(0,i-4);j<=Math.min(out.length-1,i+4);j++){if(j!==i){const b=ym(out[j]);if(b!=null)nb.push(b);}}
+    const near=nb.filter(b=>Math.abs(a-b)<=2).length;
+    if(nb.length>=3&&near<nb.length/2)x.w.push({k:'t',m:'Tarih komşu kayıtlardan çok farklı, kontrol et'});
+  });
+  // hasta eşleştirme ve tekrar kontrolü
+  const seen=new Set();
+  out.forEach(x=>{
+    const ex=matchPatient(x),keys=[tail10(x.tel),lc((x.ad+' '+x.soyad).trim())].filter(Boolean);
+    x.mark=ex?'kayıtlı hasta':(keys.some(k=>seen.has(k))?'bu aktarımda':'yeni hasta');
+    keys.forEach(k=>seen.add(k));
+    if(ex&&x.tarih&&S.visits.some(v=>v.patientId===ex.id&&v.tarih===x.tarih&&v.eski&&Math.abs(num(v.ucret)-x.ucret)<0.01))x.w.push({k:'d',m:'Bu ziyaret zaten aktarılmış görünüyor'});
+    x.include=x.w.length===0;
+  });
+  const gotU=round2(out.reduce((a,x)=>a+x.ucret,0)),gotM=round2(out.reduce((a,x)=>a+x.maliyet,0));
+  const cmp=totals.found?{fileU:totals.u,fileM:totals.m,gotU,gotM,ok:Math.abs(totals.u-gotU)<1&&Math.abs(totals.m-gotM)<1}:null;
+  return {items:out,cmp};
+}
+function pImport(){
+  if(!IM.items){
+    return {t:'Notlardan içe aktar',back:1,h:`<div class="note">Not defterindeki bir ayın (veya birkaç ayın) metnini kopyalayıp aşağıya yapıştır. <b>Metin telefondan çıkmaz.</b> Kaydetmeden önce her kaydı görüp onaylayacaksın.</div>
+    <textarea id="im_text" rows="12" placeholder="Metni buraya yapıştır..." style="font-size:14px">${esc(IM.text)}</textarea>
+    <button class="btn full" style="margin-top:10px" data-act="imp-parse">Ayrıştır ve önizle</button>
+    <div class="note">Önce tek bir ay dene. Eski ziyaretler depodan düşmez, maliyetleri defterdeki gibi aynen alınır. Aynı kişi telefon veya isimden eşleşir. Aynı tarihte birkaç kişi veya çok günlü kürler için tek yazılan ücret ve maliyet ziyaretlere eşit bölünür.</div>`};
+  }
+  const it=IM.items,sel=it.filter(x=>x.include);
+  const su=sel.reduce((a,x)=>a+num(x.ucret),0),sm=sel.reduce((a,x)=>a+num(x.maliyet),0);
+  const np=new Set(sel.filter(x=>x.mark==='yeni hasta').map(x=>lc(x.ad+' '+x.soyad))).size;
+  let h='';
+  if(IM.cmp)h+=IM.cmp.ok?`<div class="note">✓ Defterdeki toplamlarla tutuyor: ücret ${money(IM.cmp.fileU)}, maliyet ${money(IM.cmp.fileM)}.</div>`:`<div class="card alert"><b>⚠️ Toplamlar tutmuyor.</b><div class="muted">Defterdeki: ücret ${money(IM.cmp.fileU)}, maliyet ${money(IM.cmp.fileM)}<br>Ayrıştırılan: ücret ${money(IM.cmp.gotU)}, maliyet ${money(IM.cmp.gotM)}<br>Eksik veya yanlış okunan bir kayıt olabilir, aşağıyı kontrol et.</div></div>`;
+  h+=`<div class="card sum"><b>${it.length}</b> ziyaret bulundu, <b>${sel.length}</b> seçili.<table class="tb" style="margin-top:6px"><tr><td>Seçili ücret</td><td class="r">${money(su)}</td></tr><tr><td>Seçili maliyet</td><td class="r">${money(sm)}</td></tr><tr class="tot"><td>Kâr</td><td class="r">${money(su-sm)}</td></tr><tr><td>Yeni açılacak hasta</td><td class="r">${np}</td></tr></table></div>`;
+  h+=`<div class="row" style="margin-bottom:10px"><button class="btn sm gray" data-act="imp-sel" data-m="ok">Uyarısızları seç</button><button class="btn sm gray" data-act="imp-sel" data-m="none">Hiçbirini seçme</button></div>`;
+  h+=it.map((x,i)=>`<div class="card ${x.w.length?'alert':''}"><div class="item"><input type="checkbox" data-act="imp-toggle" data-i="${i}" ${x.include?'checked':''}><div class="grow" data-act="imp-edit" data-i="${i}"><b>${esc((x.ad+' '+x.soyad).trim()||'(isimsiz)')}</b> <span class="badge">${esc(x.mark)}</span><div class="muted">${x.tarih?fd(x.tarih):'tarih yok'} ${esc(x.saat)} · ${esc(x.hizmetAd.join(', ')||'—')}</div>${x.items.length?`<div class="muted">💊 ${x.items.map(a=>esc(a.ad)+(a.adet!==1?' ×'+a.adet:'')).join(', ')}</div>`:''}<div class="muted">Ücret ${money(x.ucret)} · Maliyet ${money(x.maliyet)}</div>${x.w.map(a=>`<span class="badge red">${esc(a.m)}</span>`).join('')}${x.n.map(a=>`<span class="badge">${esc(a)}</span>`).join('')}</div></div></div>`).join('');
+  h+=`<div class="row" style="position:sticky;bottom:calc(76px + env(safe-area-inset-bottom));margin-top:10px"><button class="btn gray" data-act="imp-reset">Baştan</button><button class="btn" data-act="imp-save">Seçilenleri kaydet (${sel.length})</button></div>`;
+  return {t:'Önizleme',back:1,h};
+}
+
+/* ---------- Yedekleme ---------- */
+const b64=u8=>{let s='';for(let i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s);};
+const unb64=s=>{const b=atob(s),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u;};
+async function deriveKey(pw,salt){
+  const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:250000,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+}
+async function makeBackup(pw){
+  const files=[];
+  for(const f of S.files){const b=await fGet(f.id);if(b)files.push({id:f.id,type:b.type,data:b64(new Uint8Array(await b.arrayBuffer()))});}
+  const json=JSON.stringify({app:'hastatakip',ver:1,at:new Date().toISOString(),state:S,files});
+  const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
+  const key=await deriveKey(pw,salt);
+  const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},key,new TextEncoder().encode(json)));
+  return new Blob([JSON.stringify({m:'HT1',s:b64(salt),i:b64(iv),d:b64(ct)})],{type:'application/json'});
+}
+async function restoreBackup(file,pw){
+  const o=JSON.parse(await file.text());
+  if(o.m!=='HT1')throw new Error('format');
+  const key=await deriveKey(pw,unb64(o.s));
+  let plain;
+  try{plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(o.i)},key,unb64(o.d));}catch(e){throw new Error('pw');}
+  const p=JSON.parse(new TextDecoder().decode(plain));
+  if(!p.state)throw new Error('format');
+  await fClear();
+  for(const f of p.files||[])await fPut(f.id,new Blob([unb64(f.data)],{type:f.type}));
+  S=ensureShape(p.state);
+  await kvSet('state',S);
+}
+async function saveFile(blob,name){
+  const f=new File([blob],name,{type:blob.type});
+  if(navigator.canShare&&navigator.canShare({files:[f]})){
+    try{await navigator.share({files:[f],title:name});return true;}catch(e){if(e&&e.name==='AbortError')return false;}
+  }
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},4000);return true;
+}
+function pBackup(){
+  const ls=S.settings.lastBackup;
+  const h=`<div class="card"><div class="muted">Son yedek</div><div class="big" style="font-size:20px">${ls?fd(ls.slice(0,10))+' ('+dayDiff(ls.slice(0,10),today())+' gün önce)':'Hiç alınmadı'}</div><div class="muted">O zamandan beri ${S.settings.sinceBackup} yeni ziyaret</div></div>
+  <div class="note"><b>Nasıl yedeklenir?</b> Şifreli yedek al'a bas, şifre belirle, açılan menüden <b>Dosyalara kaydet → iCloud Drive</b>'ı seç. Şifreyi unutursan yedek açılamaz. Güncelleme yapmadan önce de yedek al.</div>
+  <button class="btn full" data-act="bk-make">🔒 Şifreli yedek al</button>
+  <button class="btn full gray" data-act="bk-restore">♻️ Yedekten geri yükle</button><input type="file" id="bkIn" style="display:none">
+  <div class="card muted">${S.patients.length} hasta · ${S.visits.length} ziyaret · ${S.files.length} tahlil dosyası</div>`;
+  return {t:'Yedekleme',back:1,h};
+}
+
+function pMore(){
+  const item=(i,t,p,s)=>`<div class="card item" data-act="go" data-p="${p}"><div style="font-size:24px">${i}</div><div class="grow"><b>${t}</b><div class="muted">${s}</div></div><div class="muted">›</div></div>`;
+  let h=item('💸','Giderler','expenses','Yakıt, araç bakım, eczane (ilaç dışı), diğer')+item('👩‍⚕️','Hemşireler','nurses','Yönlendirdiğin hemşireler')+item('🧰','Hizmetler','services','Hizmetler ve otomatik düşen malzemeler')+item('📥','Notlardan içe aktar','import','Eski not defteri kayıtlarını aktar')+item('🔒','Yedekleme','backup','Şifreli yedek al / geri yükle');
+  h+=`<h2>Uygulama</h2><div class="card"><div class="muted">Sürüm ${VERSION}</div><button class="btn full gray" style="margin-top:8px" data-act="update">🔄 Güncelle (en yeni sürümü çek)</button><div class="muted">Güncellemeden önce yedek al. Veriler silinmez.</div></div>
+  <div class="card"><b>Tüm verileri sil</b><div class="muted">Deneme kayıtlarını temizlemek için. Geri alınamaz.</div><button class="btn red full" style="margin-top:8px" data-act="wipe">Tüm verileri sil</button></div>`;
+  return {t:'Daha fazla',h};
+}
+
+/* ============ Olaylar ============ */
+const A={
+  tab:d=>{H=[];R={page:d.p};render();},
+  go:d=>{H.push(R);if(d.p==='patient')P.tab='visits';R={page:d.p,id:d.id};render();},
+  back:()=>{R=H.pop()||{page:'home'};render();},
+  'm-close':()=>closeModal(),
+  'm-save':()=>{const v=collect();const r=MF.onSave(v);if(r!==false)closeModal();},
+  'm-del':()=>{const f=MF.onDelete;if(f)f();},
+  // hastalar
+  patNew:()=>patForm(null),
+  patEdit:d=>patForm(patient(d.id)),
+  patDel:d=>{
+    const p=patient(d.id);if(!confirm(pname(p)+' ve tüm ziyaretleri, planları, tahlil dosyaları silinecek. Geri alınamaz. Emin misin?'))return;
+    S.visits.filter(v=>v.patientId===p.id).forEach(deleteVisitData);
+    S.files.filter(f=>f.patientId===p.id).forEach(f=>fDel(f.id));
+    S.files=S.files.filter(f=>f.patientId!==p.id);S.plans=S.plans.filter(x=>x.patientId!==p.id);S.calls=S.calls.filter(x=>x.patientId!==p.id);
+    S.patients=S.patients.filter(x=>x.id!==p.id);save();A.back();
+  },
+  ptab:d=>{P.tab=d.t;render(true);},
+  newVisitPick:()=>pickPatient(id=>A.visitNew({id})),
+  'pk-sel':d=>{const cb=PK.cb;closeModal();cb(d.id);},
+  'pk-new':()=>{const cb=PK.cb;closeModal();patForm(null,p=>cb(p.id));},
+  pay:d=>{
+    const vs=S.visits.filter(v=>v.patientId===d.id&&num(v.ucret)>num(v.odenen)).sort((a,b)=>a.tarih.localeCompare(b.tarih));
+    const borc=vs.reduce((a,v)=>a+num(v.ucret)-num(v.odenen),0);
+    openForm({title:'Ödeme al',note:'Kalan borç: <b>'+money(borc)+'</b>. Tutar en eski borçtan başlayarak düşülür.',fields:[{k:'tutar',label:'Alınan tutar (TL)',type:'num',value:ns(borc)}],
+      onSave:v=>{let t=num(v.tutar);if(t<=0){toast('Tutar yaz');return false;}for(const x of vs){if(t<=0)break;const need=num(x.ucret)-num(x.odenen),p=Math.min(need,t);x.odenen=round2(num(x.odenen)+p);t-=p;}save();render(true);toast('Ödeme kaydedildi');}});
+  },
+  // ziyaret
+  visitNew:d=>{H.push(R);V=newV(d.id);R={page:'visit'};render();},
+  visitEdit:d=>{
+    const v=S.visits.find(x=>x.id===d.id);if(!v)return;
+    V=JSON.parse(JSON.stringify(v));V.ucretAuto=false;V.odenenAuto=false;
+    ['ucret','odenen','hemsireUcret','hizmetBedeli','maliyet'].forEach(k=>{V[k]=V[k]?ns(V[k]):'';});
+    V.kontrol=V.kontrol||'';V.sikayet=V.sikayet||'';V.olcum=V.olcum||'';V.not=V.not||'';
+    H.push(R);R={page:'visit'};render();
+  },
+  'v-svc':d=>{
+    const s=S.services.find(x=>x.id===d.id),i=V.hizmetler.indexOf(d.id);
+    if(i<0){V.hizmetler.push(d.id);addMalz(s,1);}
+    else{V.hizmetler.splice(i,1);addMalz(s,-1);if(s.tip==='lab'){V.tests=[];V.hizmetBedeli='';}}
+    render(true);
+  },
+  'v-item':d=>{
+    const i=V.items.findIndex(x=>x.id===d.id);
+    if(i>=0)V.items.splice(i,1);else{const st=S.stock.find(x=>x.id===d.id);V.items.push({id:st.id,ad:st.ad,tip:st.tip,adet:1,birim:num(st.birim)});}
+    render(true);
+  },
+  'v-step':d=>{const it=V.items.find(x=>x.id===d.id);it.adet+=+d.d;if(it.adet<=0)V.items=V.items.filter(x=>x!==it);render(true);},
+  'v-test':d=>{
+    const i=V.tests.findIndex(x=>x.id===d.id);
+    if(i>=0)V.tests.splice(i,1);else{const t=S.tests.find(x=>x.id===d.id);V.tests.push({id:t.id,ad:t.ad,maliyet:num(t.maliyet),satis:num(t.satis)});}
+    render(true);
+  },
+  'v-save':()=>{
+    if(!V.tarih){toast('Tarih seçmelisin');return;}
+    if(!V.hizmetler.length&&!confirm('Hiç hizmet seçilmedi. Yine de kaydedilsin mi?'))return;
+    const nurse=V.kim!=='ben';
+    const hem=S.nurses.find(n=>n.id===V.kim);
+    const v={
+      id:V.id||uid(),patientId:V.patientId,tarih:V.tarih,saat:V.saat,kim:V.kim,kimAd:nurse?(hem?hem.ad:(V.kimAd||'Hemşire')):'',
+      hizmetler:V.hizmetler.slice(),hizmetAd:V.hizmetler.map(id=>(S.services.find(s=>s.id===id)||{}).ad).filter(Boolean),
+      items:V.items.filter(i=>i.adet>0).map(i=>({id:i.id,ad:i.ad,tip:i.tip,adet:i.adet,birim:num(i.birim)})),
+      tests:V.tests.map(t=>({id:t.id,ad:t.ad,maliyet:num(t.maliyet),satis:num(t.satis)})),
+      hizmetBedeli:num(V.hizmetBedeli),ucret:num(V.ucret),odenen:num(V.odenen),hemsireUcret:nurse?num(V.hemsireUcret):0,
+      labOdendi:!!V.labOdendi,sikayet:V.sikayet,olcum:V.olcum,kontrol:V.kontrol,not:V.not
+    };
+    if(V.eski){v.eski=true;v.maliyet=num(V.maliyet);}
+    const old=V.id?S.visits.find(x=>x.id===V.id):null;
+    if(old){applyStock(old,+1);Object.assign(old,v);}else{S.visits.push(v);S.settings.sinceBackup++;}
+    applyStock(v,-1);
+    // negatif stok uyarısı
+    const neg=(nurse||v.eski)?[]:v.items.map(i=>S.stock.find(s=>s.id===i.id)).filter(s=>s&&num(s.adet)<0);
+    // ertesi gün arama
+    const c=S.calls.find(x=>x.visitId===v.id);
+    if(c){if(!c.done)c.tarih=addDays(v.tarih,1);}
+    else if(addDays(v.tarih,1)>=addDays(today(),-1))S.calls.push({id:uid(),patientId:v.patientId,visitId:v.id,tarih:addDays(v.tarih,1),done:false});
+    // kontrol planı
+    const kp=S.plans.find(x=>x.fromVisit===v.id&&!x.done);
+    if(v.kontrol){if(kp)kp.tarih=v.kontrol;else S.plans.push({id:uid(),patientId:v.patientId,tarih:v.kontrol,saat:'',islem:'Kontrol',fromVisit:v.id,done:false});}
+    else if(kp)S.plans=S.plans.filter(x=>x!==kp);
+    if(V.planId){const pl=S.plans.find(x=>x.id===V.planId);if(pl)pl.done=true;}
+    save();V=null;A.back();
+    toast(neg.length?'Kaydedildi. Depoda eksiye düştü: '+neg.map(s=>s.ad).join(', '):'Ziyaret kaydedildi');
+  },
+  'v-del':()=>{
+    if(!confirm('Bu ziyaret silinsin mi? Kullanılan malzemeler depoya geri eklenir.'))return;
+    const v=S.visits.find(x=>x.id===V.id);if(v)deleteVisitData(v);save();V=null;A.back();
+  },
+  // planlar
+  planNew:d=>{
+    openForm({title:'Yeni plan',fields:[{k:'tarih',label:'Tarih',type:'date',value:addDays(today(),1)},{k:'saat',label:'Saat',type:'time',value:''},{k:'islem',label:'Yapılacak işlem (örn. 5 günlük serum kürü)',value:''}],
+      onSave:v=>{if(!v.tarih||!v.islem){toast('Tarih ve işlem yaz');return false;}S.plans.push({id:uid(),patientId:d.id,tarih:v.tarih,saat:v.saat,islem:v.islem,done:false});save();render(true);}});
+  },
+  planEdit:d=>{
+    const p=S.plans.find(x=>x.id===d.id);
+    openForm({title:'Planı düzenle',fields:[{k:'tarih',label:'Tarih',type:'date',value:p.tarih},{k:'saat',label:'Saat',type:'time',value:p.saat},{k:'islem',label:'İşlem',value:p.islem}],
+      onDelete:()=>{if(!confirm('Plan silinsin mi?'))return;S.plans=S.plans.filter(x=>x!==p);save();closeModal();render(true);},
+      onSave:v=>{if(!v.tarih||!v.islem){toast('Tarih ve işlem yaz');return false;}Object.assign(p,{tarih:v.tarih,saat:v.saat,islem:v.islem});save();render(true);}});
+  },
+  planDo:d=>{const p=S.plans.find(x=>x.id===d.id);H.push(R);V=newV(p.patientId,{tarih:p.tarih,saat:p.saat||nowTime(),planId:p.id,not:p.islem?'Plan: '+p.islem:''});R={page:'visit'};render();},
+  callDone:d=>{
+    const c=S.calls.find(x=>x.id===d.id);
+    openForm({title:'Hasta arandı',note:esc(pname(patient(c.patientId)))+' ile görüştün. Durumunu yaz:',fields:[{k:'not',label:'Hastanın durumu',type:'area',value:''}],
+      onSave:v=>{c.done=true;c.not=v.not;c.doneAt=today();save();render(true);}});
+  },
+  // tahlil dosyaları
+  fileAdd:d=>{const inp=$('#fileIn');inp.onchange=async()=>{
+    const fl=[...inp.files];if(!fl.length)return;toast('Kaydediliyor...');
+    for(const f of fl){const b=await shrink(f);const id=uid();await fPut(id,b);S.files.push({id,patientId:d.id,ad:'Tahlil '+fd(today()),tarih:today(),tip:b.type||f.type||'image/jpeg',not:''});}
+    await save();render(true);toast(fl.length+' dosya eklendi');
+  };inp.click();},
+  fileOpen:async d=>{
+    const f=S.files.find(x=>x.id===d.id),b=await fGet(d.id);if(!b){toast('Dosya bulunamadı');return;}
+    const url=URL.createObjectURL(b);
+    if(String(f.tip).startsWith('image/'))modal(`<h3>${esc(f.ad)}</h3><img class="prev" src="${url}"><div class="btns"><button class="btn gray" data-act="m-close">Kapat</button></div>`);
+    else modal(`<h3>${esc(f.ad)}</h3><a class="btn full" href="${url}" target="_blank">PDF'i aç</a><div class="btns"><button class="btn gray" data-act="m-close">Kapat</button></div>`);
+  },
+  fileEdit:d=>{
+    const f=S.files.find(x=>x.id===d.id);
+    openForm({title:'Tahlil dosyası',fields:[{k:'ad',label:'Ad',value:f.ad},{k:'tarih',label:'Tarih',type:'date',value:f.tarih},{k:'not',label:'Not',value:f.not}],
+      onDelete:()=>{if(!confirm('Dosya silinsin mi?'))return;fDel(f.id);S.files=S.files.filter(x=>x!==f);save();closeModal();render(true);},
+      onSave:v=>{Object.assign(f,{ad:v.ad||f.ad,tarih:v.tarih||f.tarih,not:v.not});save();render(true);}});
+  },
+  // depo, lab, vb.
+  stockNew:()=>stockForm(null),
+  stockEdit:d=>stockForm(S.stock.find(x=>x.id===d.id)),
+  stockAdd:d=>stockAddForm(S.stock.find(x=>x.id===d.id)),
+  testNew:()=>testForm(null),
+  testEdit:d=>testForm(S.tests.find(x=>x.id===d.id)),
+  nurseNew:()=>nurseForm(null),
+  nurseEdit:d=>nurseForm(S.nurses.find(x=>x.id===d.id)),
+  expNew:()=>expForm(null),
+  expEdit:d=>expForm(S.expenses.find(x=>x.id===d.id)),
+  catNew:()=>openForm({title:'Yeni gider kategorisi',fields:[{k:'ad',label:'Kategori adı',value:''}],onSave:v=>{if(!v.ad){toast('Ad yaz');return false;}if(!allCats().includes(v.ad))S.expCats.push(v.ad);save();render(true);}}),
+  monthDetail:d=>monthDetail(+d.m),
+  labPaid:d=>{const v=S.visits.find(x=>x.id===d.id);v.labOdendi=true;save();render(true);},
+  csv:async()=>{const y=R.year||new Date().getFullYear();await saveFile(new Blob([csvYear(y)],{type:'text/csv'}),'maliye-'+y+'.csv');},
+  // hizmetler
+  svcNew:()=>{SD={ad:'',tip:'normal',ucret:'',malz:[]};svcRender();},
+  svcEdit:d=>{const s=S.services.find(x=>x.id===d.id);SD={id:s.id,ad:s.ad,tip:s.tip,ucret:s.ucret?ns(s.ucret):'',malz:JSON.parse(JSON.stringify(s.malz||[]))};svcRender();},
+  'sv-step':d=>{svcSync();const m=SD.malz[+d.ix];m.adet+=+d.d;if(m.adet<=0)SD.malz.splice(+d.ix,1);svcRender();},
+  'sv-add':()=>{svcSync();const id=$('#sv_pick').value;if(id)SD.malz.push({id,adet:1});svcRender();},
+  'sv-del':()=>{if(!confirm('Hizmet silinsin mi? Eski ziyaretler etkilenmez.'))return;S.services=S.services.filter(x=>x.id!==SD.id);save();closeModal();render(true);},
+  'sv-save':()=>{
+    svcSync();if(!SD.ad.trim()){toast('Hizmet adı yaz');return;}
+    const o={ad:SD.ad.trim(),tip:SD.tip,ucret:num(SD.ucret),malz:SD.malz};
+    if(SD.id)Object.assign(S.services.find(x=>x.id===SD.id),o);else S.services.push(Object.assign({id:uid()},o));
+    save();closeModal();render(true);
+  },
+  // notlardan içe aktarma
+  'imp-parse':()=>{
+    if(!IM.text.trim()){toast('Önce metni yapıştır');return;}
+    let r;try{r=parseNotes(IM.text);}catch(e){alert('Metin ayrıştırılamadı: '+e.message);return;}
+    if(!r.items.length){toast('Hiç ziyaret bulunamadı. Tarih satırları (örn. 07.03.2023) var mı?');return;}
+    IM.items=r.items;IM.cmp=r.cmp;render();
+  },
+  'imp-reset':()=>{IM={text:'',items:null,cmp:null};render();},
+  'imp-toggle':d=>{
+    const x=IM.items[+d.i];
+    if(!x.include&&(!x.tarih||!x.ad)){toast('Önce kayda dokunup tarihi / ismi düzelt');render(true);return;}
+    x.include=!x.include;render(true);
+  },
+  'imp-sel':d=>{IM.items.forEach(x=>{x.include=d.m==='ok'?(x.w.length===0):false;});render(true);},
+  'imp-edit':d=>{
+    const x=IM.items[+d.i];
+    openForm({title:'Kaydı düzelt',fields:[
+      {k:'tarih',label:'Tarih',type:'date',value:x.tarih},{k:'saat',label:'Saat',type:'time',value:x.saat},
+      {k:'ad',label:'Ad',value:x.ad},{k:'soyad',label:'Soyad',value:x.soyad},{k:'tel',label:'Telefon',type:'tel',value:x.tel},
+      {k:'ucret',label:'Ücret (TL)',type:'num',value:ns(x.ucret)},{k:'maliyet',label:'Maliyet (TL)',type:'num',value:ns(x.maliyet)}],
+      onSave:v=>{
+        Object.assign(x,{tarih:v.tarih,saat:v.saat,ad:v.ad,soyad:v.soyad,tel:v.tel,ucret:num(v.ucret),maliyet:num(v.maliyet)});
+        if(x.tarih)x.w=x.w.filter(a=>a.k!=='t');
+        if(x.ad)x.w=x.w.filter(a=>a.k!=='a');
+        const ex=matchPatient(x);x.mark=ex?'kayıtlı hasta':'yeni hasta';
+        x.include=x.w.length===0&&!!x.tarih&&!!x.ad;
+        render(true);
+      }});
+  },
+  'imp-save':()=>{
+    const sel=IM.items.filter(x=>x.include);
+    if(!sel.length){toast('Seçili ziyaret yok');return;}
+    if(!confirm(sel.length+' ziyaret kaydedilecek. Önce yedek aldın mı? Devam edilsin mi?'))return;
+    let np=0;
+    sel.forEach(x=>{
+      let p=matchPatient(x);
+      if(!p){p={id:uid(),ad:x.ad,soyad:x.soyad,dogum:'',tc:x.tc||'',tel:x.tel||'',adres:x.adres||'',not:'',created:today()};S.patients.push(p);np++;}
+      else{if(!p.tel&&x.tel)p.tel=x.tel;if(!p.tc&&x.tc)p.tc=x.tc;if(!p.adres&&x.adres)p.adres=x.adres;}
+      S.visits.push({id:uid(),patientId:p.id,tarih:x.tarih,saat:x.saat||'',kim:'ben',kimAd:'',hizmetler:x.hizmetler,hizmetAd:x.hizmetAd,
+        items:x.items.map(i=>Object.assign({},i)),tests:[],hizmetBedeli:0,ucret:num(x.ucret),odenen:num(x.ucret),hemsireUcret:0,labOdendi:true,
+        sikayet:x.sikayet||'',olcum:'',kontrol:'',not:'Not defterinden aktarıldı',eski:true,maliyet:num(x.maliyet)});
+    });
+    S.settings.sinceBackup+=sel.length;save();
+    IM={text:'',items:null,cmp:null};
+    H=[];R={page:'patients'};render();
+    toast(sel.length+' ziyaret aktarıldı, '+np+' yeni hasta açıldı');
+  },
+  // yedek
+  'bk-make':()=>openForm({title:'Yedek şifresi',note:'Bu şifreyi unutursan yedek açılamaz. Güvenli bir yere not al.',fields:[{k:'pw',label:'Şifre (en az 6 karakter)',type:'text',value:''},{k:'pw2',label:'Şifre (tekrar)',type:'text',value:''}],
+    onSave:v=>{
+      if(v.pw.length<6){toast('Şifre en az 6 karakter olmalı');return false;}
+      if(v.pw!==v.pw2){toast('Şifreler aynı değil');return false;}
+      setTimeout(async()=>{
+        modal('<h3>Yedek hazırlanıyor...</h3><div class="muted">Dosya sayısına göre biraz sürebilir.</div>');
+        try{BK=await makeBackup(v.pw);modal(`<h3>Yedek hazır</h3><div class="note">Aşağıdaki düğmeye bas, menüden <b>Dosyalara Kaydet</b> → iCloud Drive'ı seç.</div><button class="btn full" data-act="bk-save">Kaydet / Paylaş</button><div class="btns"><button class="btn gray" data-act="m-close">Kapat</button></div>`);}
+        catch(e){closeModal();alert('Yedek alınamadı: '+e.message);}
+      },50);
+    }}),
+  'bk-save':async()=>{
+    const ok=await saveFile(BK,'hasta-yedek-'+today()+'.json');
+    if(ok){S.settings.lastBackup=new Date().toISOString();S.settings.sinceBackup=0;save();BK=null;closeModal();render(true);toast('Yedek kaydedildi');}
+  },
+  'bk-restore':()=>{const inp=$('#bkIn');inp.value='';inp.onchange=()=>{
+    const f=inp.files[0];if(!f)return;
+    openForm({title:'Yedekten geri yükle',note:'<b>Dikkat:</b> şu anki tüm veriler silinip yedekteki verilerle değiştirilir.',fields:[{k:'pw',label:'Yedek şifresi',value:''}],
+      onSave:v=>{
+        setTimeout(async()=>{
+          modal('<h3>Geri yükleniyor...</h3>');
+          try{await restoreBackup(f,v.pw);closeModal();A.tab({p:'home'});toast('Yedek geri yüklendi');}
+          catch(e){closeModal();alert(e.message==='pw'?'Şifre yanlış.':'Dosya geçerli bir yedek değil.');}
+        },50);
+      }});
+  };inp.click();},
+  update:async()=>{
+    if(!confirm('Güncellemeden önce yedek aldın mı? Devam edilsin mi? (Verilerin silinmez.)'))return;
+    try{const rs=await navigator.serviceWorker.getRegistrations();for(const r of rs)await r.unregister();const ks=await caches.keys();for(const k of ks)await caches.delete(k);}catch(e){}
+    location.reload();
+  },
+  wipe:async()=>{
+    if(!confirm('TÜM hasta ve depo verileri silinecek. Geri alınamaz. Devam edilsin mi?'))return;
+    const t=prompt('Onaylamak için SIL yaz:');if(!t||t.trim().toUpperCase().replace('İ','I')!=='SIL')return;
+    await fClear();S=defaults();await kvSet('state',S);H=[];R={page:'home'};render();toast('Tüm veriler silindi');
+  }
+};
+
+async function shrink(file){
+  if(!String(file.type).startsWith('image/'))return file;
+  try{
+    const bmp=await createImageBitmap(file),sc=Math.min(1,1800/Math.max(bmp.width,bmp.height));
+    const c=document.createElement('canvas');c.width=Math.round(bmp.width*sc);c.height=Math.round(bmp.height*sc);
+    c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);
+    const b=await new Promise(r=>c.toBlob(r,'image/jpeg',0.82));
+    return b||file;
+  }catch(e){return file;}
+}
+
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-act]');if(!el)return;
+  const fn=A[el.dataset.act];if(fn){e.preventDefault();fn(el.dataset,el);}
+});
+document.addEventListener('input',e=>{
+  const t=e.target;
+  if(t.dataset&&t.dataset.v!==undefined&&t.tagName!=='SELECT'&&!(t.type==='date'&&false)){vInput(t);return;}
+  if(t.id==='pk_q')pkRender();
+  if(t.id==='im_text')IM.text=t.value;
+  if(t.id==='ps_q'){$('#ps_l').innerHTML=plist(t.value,'page');}
+});
+document.addEventListener('change',e=>{
+  const t=e.target;
+  if(t.dataset&&t.dataset.v==='kim'){V.kim=t.value;const n=S.nurses.find(x=>x.id===t.value);V.kimAd=n?n.ad:'';render(true);return;}
+  if(t.id==='finyear'){R.year=+t.value;render(true);}
+  if(t.id==='expyear'){R.year=+t.value;render(true);}
+  if(t.id==='sv_tip'){svcSync();}
+});
+
+(async function init(){
+  try{db=await idb();}catch(e){document.body.innerHTML='<p style="padding:20px">Bu tarayıcıda veri saklama kullanılamıyor. Safari\'de özel gezinme kapalı olmalı.</p>';return;}
+  try{S=await kvGet('state');}catch(e){S=null;}
+  if(!S){S=defaults();await kvSet('state',S);}
+  ensureShape(S);
+  if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
+  if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+  render();
+})();
+</script>
+</body>
+</html>
