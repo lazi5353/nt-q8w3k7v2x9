@@ -99,7 +99,7 @@ a.tel{color:var(--p);text-decoration:none;font-weight:600}
 <script>
 'use strict';
 /* ============ Yardımcılar ============ */
-const VERSION='1.3';
+const VERSION='1.5';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
@@ -676,14 +676,16 @@ const ALIAS={bemix:'Bemiks'};
 function splitName(n){
   n=String(n||'').replace(/([a-zçğıöşü])([A-ZÇĞİÖŞÜ])/g,'$1 $2').replace(/\s+/g,' ').trim();
   if(!n)return {ad:'',soyad:''};
-  const w=n.split(' ');
+  const w=n.split(' ').filter(t=>/[A-Za-zÇĞİÖŞÜçğıöşü]/.test(t)&&!/^(?:t\.?c\.?|tckn)[-:.–=]*$/i.test(t)&&!/^d\.?t\.?[-:–=]+$/i.test(t));
+  n=w.join(' ');
+  if(!w.length)return {ad:'',soyad:''};
   if(w.length===1||/^\(/.test(w[w.length-1]))return {ad:n,soyad:''};
   return {ad:w.slice(0,-1).join(' '),soyad:w[w.length-1]};
 }
 const META_RX=/^(?:d\.?\s?t\.?|do[ğg]um|t\.?\s?c\.?)\s*[:.\-]?\s*\d|^\d{11}$/i;
 function parsePerson(line){
   let s=line.replace(/ /g,' '),tc='',tel='',dogum='';
-  s=s.replace(/t\.?\s?c\.?\s*(?:kimlik)?\s*(?:no)?\s*[:.]?\s*(\d{11})/i,(m,d)=>{tc=d;return ' ';});
+  s=s.replace(/(?:t\.?\s?c\.?|tckn)\s*(?:kimlik)?\s*(?:no|numaras[ıi])?\s*[:.\-–=]?\s*(\d{11})/i,(m,d)=>{tc=d;return ' ';});
   s=s.replace(/(?:(?:d\.?\s?t\.?|do[ğg]um(?:\s*tarihi)?)\s*[:.\-]?\s*)?(?<!\d)(\d{1,2})[./-](\d{1,2})[./-](\d{4})(?!\d)/i,(m,d,mo,y)=>{
     const dt=new Date(+y,+mo-1,+d);
     if(dt.getFullYear()===+y&&dt.getMonth()===+mo-1&&dt.getDate()===+d&&+y>=1900&&+y<=new Date().getFullYear()){dogum=ymd(dt);return ' ';}
@@ -692,7 +694,10 @@ function parsePerson(line){
   s=s.replace(PHONE_RX,m=>{tel=m.replace(/\D/g,'');return ' ';});
   if(!tc)s=s.replace(/(?<!\d)[1-9]\d{10}(?!\d)/,m=>{tc=m;return ' ';});
   if(tel.length===10)tel='0'+tel;
-  s=s.replace(/\s+/g,' ').trim().replace(/(?:^|\s)(?:t\.?\s?c\.?|d\.?\s?t\.?)\s*[:.\-]?$/i,'').replace(/^[-–.:\s]+|[-–.:\s]+$/g,'');
+  s=s.replace(/(?:^|\s)(?:t\.?\s?c\.?(?:\s*(?:kimlik|no|kn))*|tckn)\s*[:.\-–=]*(?=\s|$)/gi,' ')
+     .replace(/(?:^|\s)d\.?\s?t\.?\s*[:\-–=]+(?=\s|$)/gi,' ')
+     .replace(/(?:^|\s)do[ğg]um(?:\s*tarihi)?\s*[:\-–=]*(?=\s|$)/gi,' ');
+  s=s.replace(/\s+/g,' ').trim().replace(/^[-–.:=\s]+|[-–.:=\s]+$/g,'');
   return Object.assign(splitName(s),{tel,tc,dogum});
 }
 function isPersonStart(L,nx){
@@ -747,13 +752,15 @@ function costLine(L){
   if((m=L.match(/^k[aâ]r\s*[-:–]\s*([\d.,]*\d)/i)))return {k:'kar',v:num(m[1])};
   return null;
 }
+const fold=s=>lc(s).replace(/ç/g,'c').replace(/ğ/g,'g').replace(/ı/g,'i').replace(/ö/g,'o').replace(/ş/g,'s').replace(/ü/g,'u');
+const nkey=s=>fold(s).replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(Boolean).sort().join(' ');
 function matchPatient(x){
-  const t=tail10(x.tel),nm=lc(((x.ad||'')+' '+(x.soyad||'')).trim());
-  return S.patients.find(p=>t&&tail10(p.tel)===t)||S.patients.find(p=>x.tc&&p.tc===x.tc)||S.patients.find(p=>nm&&lc(pname(p))===nm)||null;
+  const t=tail10(x.tel),nm=nkey((x.ad||'')+' '+(x.soyad||''));
+  return S.patients.find(p=>t&&tail10(p.tel)===t)||S.patients.find(p=>x.tc&&p.tc===x.tc)||S.patients.find(p=>nm&&nkey(pname(p))===nm)||null;
 }
 function parseNotes(text){
   const lines=text.replace(/\r/g,'').replace(/ /g,' ').split('\n').map(l=>l.trim()).filter(Boolean);
-  const groups=[];let g=null,ses=null,per=null,skip=false,sec=null;
+  const groups=[];let g=null,ses=null,per=null,skip=false,sec=null,anon=0;
   const totals={u:0,m:0,found:false};
   const flush=()=>{if(sec){totals.u+=sec.u||0;totals.m+=sec.m||0;totals.found=true;sec=null;}};
   const newG=()=>{g={sessions:[],costs:{},closed:false};groups.push(g);ses=null;per=null;};
@@ -779,17 +786,23 @@ function parseNotes(text){
     const mc=costLine(L);
     if(mc){if(!g)newG();g.costs[mc.k]=mc.v;g.closed=true;per=null;continue;}
     if(per&&!per.svc&&META_RX.test(L)){
-      const pp=parsePerson(L);['tel','tc','dogum'].forEach(k=>{if(pp[k]&&!per[k])per[k]=pp[k];});continue;
+      const pp=parsePerson(L);['tel','tc','dogum'].forEach(k=>{if(pp[k]&&!per[k])per[k]=pp[k];});per.raw.push(L);continue;
     }
     if(isPersonStart(L,nx)){
       const pp=parsePerson(L);
-      if(!pp.ad&&per&&!per.svc){['tel','tc','dogum'].forEach(k=>{if(pp[k]&&!per[k])per[k]=pp[k];});continue;}
+      if(!pp.ad&&per&&!per.svc){['tel','tc','dogum'].forEach(k=>{if(pp[k]&&!per[k])per[k]=pp[k];});per.raw.push(L);continue;}
       if(!g||g.closed)newG();
       if(!ses){ses={dates:[],persons:[]};g.sessions.push(ses);}
-      per=Object.assign(pp,{svc:null,addr:[]});
+      per=Object.assign(pp,{svc:null,addr:[],raw:[L]});
       ses.persons.push(per);continue;
     }
-    if(per){if(!per.svc)per.svc=parseService(L);else per.addr.push(L);continue;}
+    if(!per&&SERV_RX.test(L)){
+      if(!g||g.closed)newG();
+      if(!ses){ses={dates:[],persons:[]};g.sessions.push(ses);}
+      per={ad:'',soyad:'',tel:'',tc:'',dogum:'',svc:null,addr:[],raw:[]};
+      ses.persons.push(per);
+    }
+    if(per){per.raw.push(L);if(!per.svc)per.svc=parseService(L);else per.addr.push(L);continue;}
   }
   flush();
   const out=[];
@@ -808,7 +821,8 @@ function parseNotes(text){
         if(dt.getFullYear()===d.y&&dt.getMonth()===d.m-1&&dt.getDate()===d.d){tarih=ymd(dt);saat=d.t;}
         else w.push({k:'t',m:'Tarih geçersiz ('+d.d+'.'+d.m+'.'+d.y+')'});
       }
-      if(!p.ad)w.push({k:'a',m:'İsim yok'});
+      let ad=p.ad,soyad=p.soyad;
+      if(!ad){ad='İsimsiz';soyad='Kayıt '+(tarih?fd(tarih):'tarihsiz')+' #'+(++anon);n.push('İsim okunamadı, geçici ad verildi. Hasta kartından düzeltebilirsin');}
       if(p.tc&&!validTC(p.tc))n.push('TC geçersiz görünüyor');
       if(U==null)n.push('Ücret yazılmamış');
       if(N>1)n.push('Ücret ve maliyet '+N+' ziyarete bölündü');
@@ -818,7 +832,7 @@ function parseNotes(text){
         return {id:st?st.id:'x'+uid(),ad:st?st.ad:it.ad,tip:st?st.tip:'ilac',adet:it.adet,birim:0};
       });
       const svc=sv.base==='Serum'?S.services.find(s=>s.tip==='serum'):S.services.find(s=>lc(s.ad)===lc(sv.base));
-      out.push({include:false,w,n,tarih,saat,ad:p.ad,soyad:p.soyad,tel:p.tel,tc:p.tc,dogum:p.dogum||'',adres:p.addr.join(' '),
+      out.push({include:false,w,n,tarih,saat,ad,soyad,raw:p.ad?'':(p.raw||[]).join(' | '),tel:p.tel,tc:p.tc,dogum:p.dogum||'',adres:p.addr.join(' '),
         hizmetler:svc?[svc.id]:[],hizmetAd:sv.base?[sv.base+(sv.count>1?' ×'+sv.count:'')]:[],items,sikayet:sv.note,
         ucret:share(U,i),maliyet:share(M,i),mark:''});
     });
@@ -833,12 +847,15 @@ function parseNotes(text){
     if(nb.length>=3&&near<nb.length/2)x.w.push({k:'t',m:'Tarih komşu kayıtlardan çok farklı, kontrol et'});
   });
   // hasta eşleştirme ve tekrar kontrolü
-  const seen=new Set();
+  const seen=new Set(),usedDup=new Set();
   out.forEach(x=>{
-    const ex=matchPatient(x),keys=[tail10(x.tel),lc((x.ad+' '+x.soyad).trim())].filter(Boolean);
-    x.mark=ex?'kayıtlı hasta':(keys.some(k=>seen.has(k))?'bu aktarımda':'yeni hasta');
+    const ex=matchPatient(x),keys=[tail10(x.tel),nkey(x.ad+' '+x.soyad)].filter(Boolean);
+    x.mark=ex?'mevcut hasta':(keys.some(k=>seen.has(k))?'bu aktarımda':'yeni hasta');
     keys.forEach(k=>seen.add(k));
-    if(ex&&x.tarih&&S.visits.some(v=>v.patientId===ex.id&&v.tarih===x.tarih&&v.eski&&Math.abs(num(v.ucret)-x.ucret)<0.01))x.w.push({k:'d',m:'Bu ziyaret zaten aktarılmış görünüyor'});
+    if(ex&&x.tarih){
+      const dv=S.visits.find(v=>v.patientId===ex.id&&v.eski&&v.tarih===x.tarih&&!usedDup.has(v.id)&&Math.abs(num(v.ucret)-x.ucret)<0.01&&Math.abs(num(v.maliyet)-x.maliyet)<0.01);
+      if(dv){usedDup.add(dv.id);x.w.push({k:'d',m:'Aynı hasta, tarih ve ücretle daha önce aktarılmış, tekrar eklenmesin diye seçilmedi'});}
+    }
     x.include=x.w.length===0;
   });
   const gotU=round2(out.reduce((a,x)=>a+x.ucret,0)),gotM=round2(out.reduce((a,x)=>a+x.maliyet,0));
@@ -859,7 +876,7 @@ function pImport(){
   if(IM.cmp)h+=IM.cmp.ok?`<div class="note">✓ Defterdeki toplamlarla tutuyor: ücret ${money(IM.cmp.fileU)}, maliyet ${money(IM.cmp.fileM)}.</div>`:`<div class="card alert"><b>⚠️ Toplamlar tutmuyor.</b><div class="muted">Defterdeki: ücret ${money(IM.cmp.fileU)}, maliyet ${money(IM.cmp.fileM)}<br>Ayrıştırılan: ücret ${money(IM.cmp.gotU)}, maliyet ${money(IM.cmp.gotM)}<br>Eksik veya yanlış okunan bir kayıt olabilir, aşağıyı kontrol et.</div></div>`;
   h+=`<div class="card sum"><b>${it.length}</b> ziyaret bulundu, <b>${sel.length}</b> seçili.<table class="tb" style="margin-top:6px"><tr><td>Seçili ücret</td><td class="r">${money(su)}</td></tr><tr><td>Seçili maliyet</td><td class="r">${money(sm)}</td></tr><tr class="tot"><td>Kâr</td><td class="r">${money(su-sm)}</td></tr><tr><td>Yeni açılacak hasta</td><td class="r">${np}</td></tr></table></div>`;
   h+=`<div class="row" style="margin-bottom:10px"><button class="btn sm gray" data-act="imp-sel" data-m="ok">Uyarısızları seç</button><button class="btn sm gray" data-act="imp-sel" data-m="none">Hiçbirini seçme</button></div>`;
-  h+=it.map((x,i)=>`<div class="card ${x.w.length?'alert':''}"><div class="item"><input type="checkbox" data-act="imp-toggle" data-i="${i}" ${x.include?'checked':''}><div class="grow" data-act="imp-edit" data-i="${i}"><b>${esc((x.ad+' '+x.soyad).trim()||'(isimsiz)')}</b> <span class="badge">${esc(x.mark)}</span><div class="muted">${x.tarih?fd(x.tarih):'tarih yok'} ${esc(x.saat)} · ${esc(x.hizmetAd.join(', ')||'—')}</div>${x.items.length?`<div class="muted">💊 ${x.items.map(a=>esc(a.ad)+(a.adet!==1?' ×'+a.adet:'')).join(', ')}</div>`:''}<div class="muted">Ücret ${money(x.ucret)} · Maliyet ${money(x.maliyet)}</div>${x.w.map(a=>`<span class="badge red">${esc(a.m)}</span>`).join('')}${x.n.map(a=>`<span class="badge">${esc(a)}</span>`).join('')}</div></div></div>`).join('');
+  h+=it.map((x,i)=>`<div class="card ${x.w.length?'alert':''}"><div class="item"><input type="checkbox" data-act="imp-toggle" data-i="${i}" ${x.include?'checked':''}><div class="grow" data-act="imp-edit" data-i="${i}"><b>${esc((x.ad+' '+x.soyad).trim()||'(isimsiz)')}</b> <span class="badge ${x.mark==='mevcut hasta'?'grn':''}">${esc(x.mark)}</span><div class="muted">${x.tarih?fd(x.tarih):'tarih yok'} ${esc(x.saat)} · ${esc(x.hizmetAd.join(', ')||'—')}</div>${x.items.length?`<div class="muted">💊 ${x.items.map(a=>esc(a.ad)+(a.adet!==1?' ×'+a.adet:'')).join(', ')}</div>`:''}<div class="muted">Ücret ${money(x.ucret)} · Maliyet ${money(x.maliyet)}</div>${x.raw?`<div class="muted">Defterde: ${esc(x.raw.slice(0,160))}</div>`:''}${x.w.map(a=>`<span class="badge red">${esc(a.m)}</span>`).join('')}${x.n.map(a=>`<span class="badge">${esc(a)}</span>`).join('')}</div></div></div>`).join('');
   h+=`<div class="row" style="position:sticky;bottom:calc(76px + env(safe-area-inset-bottom));margin-top:10px"><button class="btn gray" data-act="imp-reset">Baştan</button><button class="btn" data-act="imp-save">Seçilenleri kaydet (${sel.length})</button></div>`;
   return {t:'Önizleme',back:1,h};
 }
@@ -1108,7 +1125,7 @@ const A={
         Object.assign(x,{tarih:v.tarih,saat:v.saat,ad:v.ad,soyad:v.soyad,tel:v.tel,dogum:v.dogum,ucret:num(v.ucret),maliyet:num(v.maliyet)});
         if(x.tarih)x.w=x.w.filter(a=>a.k!=='t');
         if(x.ad)x.w=x.w.filter(a=>a.k!=='a');
-        const ex=matchPatient(x);x.mark=ex?'kayıtlı hasta':'yeni hasta';
+        const ex=matchPatient(x);x.mark=ex?'mevcut hasta':'yeni hasta';
         x.include=x.w.length===0&&!!x.tarih&&!!x.ad;
         render(true);
       }});
