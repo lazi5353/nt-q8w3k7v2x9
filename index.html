@@ -102,7 +102,7 @@ a.tel{color:var(--p);text-decoration:none;font-weight:600}
 <script>
 'use strict';
 /* ============ Yardımcılar ============ */
-const VERSION='2.5';
+const VERSION='2.6';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
@@ -146,6 +146,31 @@ function validTC(t){
   const d11=d.slice(0,10).reduce((a,b)=>a+b,0)%10;
   return ((d10+10)%10)===d[9]&&d11===d[10];
 }
+/* Döviz: ziyarette $ veya € ile alınan ücret. Hesaplar TL karşılığıyla yapılır, o günkü kur ziyarete kaydedilir. */
+const CUR={TRY:{s:'₺',ad:'TL'},USD:{s:'$',ad:'Dolar'},EUR:{s:'€',ad:'Euro'}};
+const fx=(n,c)=>(CUR[c]||CUR.TRY).s+new Intl.NumberFormat('tr-TR',{maximumFractionDigits:2}).format(round2(num(n)));
+const round4=n=>Math.round(n*10000)/10000;
+const KUR_SRC=[
+  {u:'https://api.frankfurter.dev/v1/latest?base=TRY&symbols=USD,EUR',ad:'Avrupa Merkez Bankası (Frankfurter)',d:j=>j.date},
+  {u:'https://open.er-api.com/v6/latest/TRY',ad:'ExchangeRate-API',d:j=>(j.time_last_update_utc||'').slice(5,16)}
+];
+// Sadece "TRY, USD, EUR" sorulur; hiçbir hasta bilgisi gönderilmez.
+async function fetchKur(){
+  for(const src of KUR_SRC){
+    const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),7000);
+    try{
+      const r=await fetch(src.u,{signal:ctl.signal,cache:'no-store',credentials:'omit',referrerPolicy:'no-referrer'});
+      const j=await r.json(),usd=1/num(j.rates&&j.rates.USD),eur=1/num(j.rates&&j.rates.EUR);
+      if(usd>1&&eur>1&&isFinite(usd)&&isFinite(eur)){
+        const k={tarih:today(),kaynak:src.ad+(src.d(j)?' · '+src.d(j):'')};
+        S.kur={USD:Object.assign({kur:round4(usd)},k),EUR:Object.assign({kur:round4(eur)},k)};save();return true;
+      }
+    }catch(e){}finally{clearTimeout(tm);}
+  }
+  return false;
+}
+const kurOf=c=>S.kur&&S.kur[c]?num(S.kur[c].kur):0;
+const kurInfo=c=>S.kur&&S.kur[c]?`1 ${CUR[c].s} = ${ns(S.kur[c].kur)} ₺ · ${fd(S.kur[c].tarih)}${S.kur[c].elle?' · elle girildi':' · '+esc(S.kur[c].kaynak||'')}`:'Kur yok';
 let toastT;
 function toast(m){const e=$('#toast');e.textContent=m;e.style.display='block';clearTimeout(toastT);toastT=setTimeout(()=>e.style.display='none',3200);}
 
@@ -184,7 +209,7 @@ function defaults(){
       {id:'s_lab',ad:'Laboratuvar',tip:'lab',ucret:0,malz:[]}
     ],
     expCats:['Yakıt','Araç bakım','Eczane (ilaç dışı)','Avukatlık ücreti','Diğer'],
-    settings:{lastBackup:null,sinceBackup:0,sktDays:30,labK:1.1,satK:6}
+    settings:{lastBackup:null,sinceBackup:0,sktDays:30,labK:1.1,satK:6},kur:null
   };
 }
 function ensureShape(s){const d=defaults();Object.keys(d).forEach(k=>{if(s[k]===undefined)s[k]=d[k];});Object.keys(d.settings).forEach(k=>{if(s.settings[k]===undefined)s.settings[k]=d.settings[k];});return s;}
@@ -225,6 +250,7 @@ function periodStats(y,m){
   r.visitCost=r.ilac+r.lab+r.hems+r.eski+r.elle;
   r.tmal=r.visitCost+r.giderTop+r.adjM;
   r.net=r.ucret-r.tmal;
+  r.usd=0;r.eur=0;S.visits.forEach(v=>{if(v.doviz&&inP(v.tarih)){if(v.doviz.cur==='USD')r.usd+=num(v.doviz.ucret);else if(v.doviz.cur==='EUR')r.eur+=num(v.doviz.ucret);}});
   r.cek=0;(S.transfers||[]).forEach(tr=>{if(inP(tr.tarih)&&isOwnerOut(tr)){const f=accById(tr.from);if(!f||f.tip!=='kisisel')r.cek+=num(tr.tutar);}});
   return r;
 }
@@ -237,7 +263,7 @@ function applyStock(v,sign){
 let S,R={page:'home'},H=[],V=null,MF=null,PK=null,SD=null,BK=null,P={tab:'visits'},GD=null,LX=null,VQ='';
 const pname=p=>p?((p.ad||'')+' '+(p.soyad||'')).trim():'(silinmiş hasta)';
 const patient=id=>S.patients.find(p=>p.id===id);
-const TABMAP={home:'home',patients:'patients',patient:'patients',visit:'patients',stock:'stock',lab:'lab',fin:'fin',more:'more',expenses:'more',nurses:'more',services:'more',backup:'more',import:'more',dups:'patients',debts:'home',recent:'home',analysis:'more',tpls:'more',accounts:'fin',account:'fin',cardimp:'fin'};
+const TABMAP={home:'home',patients:'patients',patient:'patients',visit:'patients',stock:'stock',lab:'lab',fin:'fin',more:'more',expenses:'more',nurses:'more',services:'more',backup:'more',import:'more',dups:'patients',debts:'home',recent:'home',analysis:'more',tpls:'more',kur:'more',accounts:'fin',account:'fin',cardimp:'fin'};
 
 function render(keep){
   let pg;
@@ -247,7 +273,7 @@ function render(keep){
     case 'fin':pg=pFin();break;case 'more':pg=pMore();break;case 'expenses':pg=pExpenses();break;
     case 'nurses':pg=pNurses();break;case 'services':pg=pServices();break;case 'backup':pg=pBackup();break;case 'import':pg=pImport();break;
     case 'dups':pg=pDups();break;case 'debts':pg=pDebts();break;case 'recent':pg=pRecent();break;case 'analysis':pg=pAnalysis();break;
-    case 'tpls':pg=pTpls();break;case 'accounts':pg=pAccounts();break;case 'account':pg=pAccount();break;case 'cardimp':pg=pCardImp();break;
+    case 'tpls':pg=pTpls();break;case 'kur':pg=pKur();break;case 'accounts':pg=pAccounts();break;case 'account':pg=pAccount();break;case 'cardimp':pg=pCardImp();break;
     default:pg=pHome();
   }
   $('#app').innerHTML=`<header class="top">${pg.back?'<button class="hb" data-act="back">‹ Geri</button>':''}<h1>${esc(pg.t)}</h1>${pg.right||''}</header><main>${pg.h}</main>`;
@@ -394,6 +420,7 @@ function visitCard(v){
   return `<div class="card" data-act="visitEdit" data-id="${v.id}">
   <div class="item"><div class="grow"><b>${fd(v.tarih)}</b> <span class="muted">${esc(v.saat||'')}</span> <span class="badge ${nurse?'org':''}">${nurse?'👩‍⚕️ '+esc(v.kimAd||'Hemşire'):'Ben'}</span>${v.eski?'<span class="badge">not defteri</span>':''}</div><div style="text-align:right"><b>${money(v.ucret)}</b></div></div>
   <div class="muted">${esc((v.hizmetAd||[]).join(', ')||'—')}</div>
+  ${v.doviz?`<div class="muted">💱 ${fx(v.doviz.ucret,v.doviz.cur)} alındı${num(v.doviz.odenen)<num(v.doviz.ucret)?` (ödenen ${fx(v.doviz.odenen,v.doviz.cur)})`:''} · kur ${ns(v.doviz.kur)} ₺</div>`:''}
   ${its?`<div class="muted">💊 ${its}${nurse?' (kayıt)':''}</div>`:''}${ts?`<div class="muted">🧪 ${ts}</div>`:''}
   <div class="muted">Maliyet ${money(c.maliyet)} · Kâr <span class="${c.kar<0?'red':'grn'}">${money(c.kar)}</span>${c.borc>0?` · <span class="red">Kalan borç ${money(c.borc)}</span>`:''}</div>
   ${v.sikayet?`<div class="muted">Şikâyet: ${esc(v.sikayet)}</div>`:''}${v.not?`<div class="muted">Not: ${esc(v.not)}</div>`:''}
@@ -436,7 +463,7 @@ function pPatient(){
 /* ---------- Ziyaret formu ---------- */
 function newV(pid,o){
   o=o||{};VQ='';
-  return {patientId:pid,tarih:o.tarih||today(),saat:o.saat||nowTime(),kim:'ben',hizmetler:[],svcN:{},elle:false,items:[],tests:[],hizmetBedeli:'',ucret:'',odenen:'',ucretAuto:true,odenenAuto:true,hemsireUcret:'',labOdendi:true,sikayet:'',olcum:'',kontrol:'',not:o.not||'',planId:o.planId||null,hesap:defHesap()};
+  return {patientId:pid,tarih:o.tarih||today(),saat:o.saat||nowTime(),kim:'ben',hizmetler:[],svcN:{},elle:false,items:[],tests:[],hizmetBedeli:'',ucret:'',odenen:'',ucretAuto:true,odenenAuto:true,hemsireUcret:'',labOdendi:true,sikayet:'',olcum:'',kontrol:'',not:o.not||'',planId:o.planId||null,hesap:defHesap(),cur:'TRY'};
 }
 function labActive(){return V.hizmetler.some(id=>{const s=S.services.find(x=>x.id===id);return s&&s.tip==='lab';});}
 function serumActive(){return V.hizmetler.some(id=>{const s=S.services.find(x=>x.id===id);return s&&s.tip==='serum';});}
@@ -475,9 +502,15 @@ function pVisit(){
     <div class="card"><label>Hizmet bedeli (bu hasta için, TL)<input data-v="hizmetBedeli" inputmode="decimal" value="${esc(ns(V.hizmetBedeli))}"></label>
     <label class="chk"><input type="checkbox" data-v="labOdendi" ${V.labOdendi?'checked':''}> Laboratuvara ödendi</label></div>`;
   }
-  h+=`<h2>Ücret</h2><div class="card">
-  <label>Alınan ücret (TL)<input id="v_ucret" data-v="ucret" inputmode="decimal" value="${esc(ns(V.ucret))}"></label>
-  <label>Ödenen (TL)<input id="v_odenen" data-v="odenen" inputmode="decimal" value="${esc(ns(V.odenen))}"></label>
+  const vc=V.cur||'TRY',vs_=CUR[vc].s;
+  h+=`<h2>Ücret</h2><div class="card"><div class="seg">${Object.keys(CUR).map(c=>`<button class="${vc===c?'on':''}" data-act="v-cur" data-c="${c}">${CUR[c].s} ${CUR[c].ad}</button>`).join('')}</div>
+  ${vc==='TRY'?`<label>Alınan ücret (TL)<input id="v_ucret" data-v="ucret" inputmode="decimal" value="${esc(ns(V.ucret))}"></label>
+  <label>Ödenen (TL)<input id="v_odenen" data-v="odenen" inputmode="decimal" value="${esc(ns(V.odenen))}"></label>`:`
+  <label>Alınan ücret (${vs_})<input id="v_ducret" data-v="ducret" inputmode="decimal" value="${esc(ns(V.ducret))}"></label>
+  <label>Ödenen (${vs_})<input id="v_dodenen" data-v="dodenen" inputmode="decimal" value="${esc(ns(V.dodenen))}"></label>
+  <label>Kur: 1 ${vs_} = kaç TL?<input id="v_kur" data-v="kur" inputmode="decimal" value="${esc(ns(V.kur))}"></label>
+  <div class="muted" style="margin-top:4px">${kurInfo(vc)}</div><button class="btn sm gray" style="margin-top:6px" data-act="kurFetch">🔄 Güncel kuru internetten çek</button>
+  <div class="note" id="v_tl" style="margin-bottom:0">${V.kur?`TL karşılığı: alınan <b>${money(V.ucret)}</b> · ödenen <b>${money(V.odenen)}</b>`:'Kuru yaz veya internetten çek.'}</div>`}
   <label>Ödeme nereye geldi?<select data-v="hesap">${S.accounts.filter(a=>a.tip!=='kisisel'||a.id===V.hesap).map(a=>`<option value="${a.id}" ${a.id===V.hesap?'selected':''}>${esc(accLabel(a))}</option>`).join('')}</select></label>
   ${nurse?`<label>Hemşireye verdiğim ücret (TL)<input data-v="hemsireUcret" inputmode="decimal" value="${esc(ns(V.hemsireUcret))}"></label>`:''}
   ${V.eski?`<label>Maliyet (TL, eski kayıt)<input data-v="maliyet" inputmode="decimal" value="${esc(ns(V.maliyet))}"></label><div class="note">Not defterinden aktarılmış kayıt: maliyet elle yazılır, depodan düşmez.</div>`:`<label class="chk"><input type="checkbox" data-v="elle" ${V.elle?'checked':''}> Maliyeti elle gir (otomatik hesabı geçersiz kıl)</label>${V.elle?`<label>Maliyet (TL)<input data-v="maliyet" inputmode="decimal" value="${esc(ns(V.maliyet))}"></label><div class="note">Depo düşümü yine de yapılır; sadece bu ziyaretin maliyeti senin yazdığın tutar olur.</div>`:''}`}</div>`;
@@ -491,6 +524,11 @@ function vtList(){
   return L.length?`<div class="chips">${L.map(t=>chip(V.tests.some(x=>x.id===t.id),'v-test',t.id,t.ad,money(testSale(t)))).join('')}</div>`:'<div class="muted">Bulunamadı</div>';
 }
 const testSnap=t=>({id:t.id,ad:t.ad,maliyet:testCost(t),satis:testSale(t)});
+function vFx(){
+  const k=num(V.kur);V.ucretAuto=false;V.odenenAuto=false;
+  V.ucret=round2(num(V.ducret)*k);V.odenen=round2(num(V.dodenen)*k);
+  const e=$('#v_tl');if(e)e.innerHTML=k?`TL karşılığı: alınan <b>${money(V.ucret)}</b> · ödenen <b>${money(V.odenen)}</b>`:'Kuru yaz veya internetten çek.';
+}
 function vRefresh(){
   if(!V)return;
   if(V.ucretAuto){V.ucret=autoUcret();const e=$('#v_ucret');if(e)e.value=ns(V.ucret);}
@@ -503,6 +541,11 @@ function vInput(t){
   if(k==='elle'){if(V.elle){const o=Object.assign({},V,{elle:false});V.maliyet=ns(visitCalc(o).maliyet);}render(true);return;}
   if(k==='ucret')V.ucretAuto=false;
   if(k==='odenen')V.odenenAuto=false;
+  if(k==='ducret'||k==='dodenen'||k==='kur'){
+    if(k==='dodenen')V.dodenenAuto=false;
+    if(k==='ducret'&&V.dodenenAuto!==false){V.dodenen=V.ducret;const e=$('#v_dodenen');if(e)e.value=V.ducret;}
+    vFx();
+  }
   vRefresh();
 }
 function addMalz(s,sign,n){
@@ -752,6 +795,8 @@ function breakdown(s){
   if(s.infoHems)h+=r('Hemşirelere ödeme (zaten maliyette)',money(s.infoHems));
   if(s.infoLab)h+=r('ULTRALAB ödemesi (zaten maliyette)',money(s.infoLab));
   if(s.cek)h+=r('Kendine aktardığın (gider değil)',money(s.cek));
+  if(s.usd)h+=r('Dolar ile alınan (ücretin içinde)',fx(s.usd,'USD'));
+  if(s.eur)h+=r('Euro ile alınan (ücretin içinde)',fx(s.eur,'EUR'));
   return h+'</table>';
 }
 function nurseStats(y,m){
@@ -1314,7 +1359,7 @@ function pBackup(){
 
 function pMore(){
   const item=(i,t,p,s)=>`<div class="card item" data-act="go" data-p="${p}"><div style="font-size:24px">${i}</div><div class="grow"><b>${t}</b><div class="muted">${s}</div></div><div class="muted">›</div></div>`;
-  let h=item('📈','Analiz','analysis','Kaybedilen, düzenli ve sık gelen hastalar, bölgeler')+item('🏦','Hesaplar ve kartlar','accounts','Banka, nakit, kredi kartı hareketleri')+item('💸','Giderler','expenses','Yakıt, araç bakım, eczane (ilaç dışı), diğer')+item('👩‍⚕️','Hemşireler','nurses','Yönlendirdiğin hemşireler')+item('🧰','Hizmetler','services','Hizmetler ve otomatik düşen malzemeler')+item('📥','Notlardan içe aktar','import','Eski not defteri kayıtlarını aktar')+item('🔒','Yedekleme','backup','Şifreli yedek al / geri yükle');
+  let h=item('📈','Analiz','analysis','Kaybedilen, düzenli ve sık gelen hastalar, bölgeler')+item('🏦','Hesaplar ve kartlar','accounts','Banka, nakit, kredi kartı hareketleri')+item('💱','Döviz kurları','kur','Dolar ve euro kuru')+item('💸','Giderler','expenses','Yakıt, araç bakım, eczane (ilaç dışı), diğer')+item('👩‍⚕️','Hemşireler','nurses','Yönlendirdiğin hemşireler')+item('🧰','Hizmetler','services','Hizmetler ve otomatik düşen malzemeler')+item('📥','Notlardan içe aktar','import','Eski not defteri kayıtlarını aktar')+item('🔒','Yedekleme','backup','Şifreli yedek al / geri yükle');
   h+=`<h2>Uygulama</h2><div class="card"><div class="muted">Sürüm ${VERSION}</div><button class="btn full gray" style="margin-top:8px" data-act="update">🔄 Güncelle (en yeni sürümü çek)</button><div class="muted">Güncellemeden önce yedek al. Veriler silinmez.</div></div>
   <div class="card"><b>Aktarılan eski kayıtları sil</b><div class="muted">Sadece "not defteri" etiketli ziyaretleri ve sadece onlardan oluşan hastaları siler. Depo, hizmetler, laboratuvar ve elle girdiğin kayıtlar kalır.</div><button class="btn red full" style="margin-top:8px" data-act="imp-wipe">Aktarılanları sil</button></div>
   <div class="card"><b>Tüm verileri sil</b><div class="muted">Deneme kayıtlarını temizlemek için. Geri alınamaz.</div><button class="btn red full" style="margin-top:8px" data-act="wipe">Tüm verileri sil</button></div>`;
@@ -1397,7 +1442,7 @@ function debtList(){
 function recentVisits(){return S.visits.filter(v=>v.tarih).slice().sort((a,b)=>(b.tarih+(b.saat||'')).localeCompare(a.tarih+(a.saat||'')));}
 function recentRow(v){
   const p=patient(v.patientId),b=visitBorc(v);
-  return `<div class="card item" data-act="go" data-p="patient" data-id="${v.patientId}"><div class="grow"><b>${esc(pname(p))}</b>${isNurse(v)?`<span class="badge org">👩‍⚕️ ${esc(v.kimAd||'Hemşire')}</span>`:''}<div class="muted">${fd(v.tarih)} ${esc(v.saat||'')} · ${esc((v.hizmetAd||[]).join(', ')||'—')}</div></div><div style="text-align:right"><b>${money(v.ucret)}</b>${b>0?`<div class="red" style="font-size:13px">borç ${money(b)}</div>`:''}</div></div>`;
+  return `<div class="card item" data-act="go" data-p="patient" data-id="${v.patientId}"><div class="grow"><b>${esc(pname(p))}</b>${isNurse(v)?`<span class="badge org">👩‍⚕️ ${esc(v.kimAd||'Hemşire')}</span>`:''}<div class="muted">${fd(v.tarih)} ${esc(v.saat||'')} · ${esc((v.hizmetAd||[]).join(', ')||'—')}</div></div><div style="text-align:right"><b>${money(v.ucret)}</b>${v.doviz?`<div class="muted" style="font-size:13px">${fx(v.doviz.ucret,v.doviz.cur)}</div>`:''}${b>0?`<div class="red" style="font-size:13px">borç ${money(b)}</div>`:''}</div></div>`;
 }
 function pDebts(){
   const L=debtList(),tot=L.reduce((a,x)=>a+x.borc,0);
@@ -1660,6 +1705,15 @@ function gkMsgLinks(){
   if(s)s.href=`sms:${String(p.tel).replace(/\s/g,'')}&body=${encodeURIComponent(tx)}`;
 }
 let GKM=null;
+function pKur(){
+  const row=c=>`<div class="card"><div class="muted">${CUR[c].ad}</div><div class="big">${kurOf(c)?'1 '+CUR[c].s+' = '+ns(kurOf(c))+' ₺':'—'}</div><div class="muted">${S.kur&&S.kur[c]?fd(S.kur[c].tarih)+' · '+esc(S.kur[c].kaynak||''):'Henüz kur yok'}</div></div>`;
+  const dv=S.visits.filter(v=>v.doviz).length;
+  return {t:'Döviz kurları',back:1,h:`<div class="note">Dolar veya euro ile ödeme alınca ziyaretin <b>Ücret</b> kısmında $ veya € seç. Tutarı o para biriminden yazarsın; kâr ve maliyet o günkü kurla TL karşılığından hesaplanır. Kur ziyarete kaydedilir, sonradan kur değişse de eski kayıt değişmez.</div>
+  ${row('USD')}${row('EUR')}
+  <button class="btn full" data-act="kurFetch">🔄 İnternetten güncel kuru çek</button><button class="btn gray full" data-act="kurManual">✏️ Kuru elle gir</button>
+  <div class="muted" style="margin:6px 2px">Kur çekerken internete sadece "TL, dolar, euro kuru nedir" sorulur; hasta bilgisi gönderilmez. Kaynak: Avrupa Merkez Bankası günlük referans kuru (Frankfurter), olmazsa ExchangeRate-API (<a href="https://www.exchangerate-api.com" target="_blank" rel="noopener">exchangerate-api.com</a>). Bunlar piyasa ortası kurlardır; bankanın alış kuru biraz farklı olabilir, istersen elle yaz.</div>
+  ${dv?`<div class="card muted">${dv} ziyaret dövizle kaydedilmiş.</div>`:''}`};
+}
 function pTpls(){
   const ex=S.patients.find(p=>p.ad)||{id:'',ad:'Ayşe',soyad:'Yılmaz'};
   let h=`<div class="note">Hastaya Mesaj gönderirken durumuna uyan şablon kendiliğinden seçilir; istersen başkasına geçip metni değiştirebilirsin. Örnekler <b>${esc(firstName(ex))}</b> adıyla gösteriliyor.</div>
@@ -1736,7 +1790,7 @@ function pAnalysis(){
 /* ---------- Hesaplar ---------- */
 function movements(id){
   const L=[];
-  S.visits.forEach(v=>(v.pays||[]).forEach(p=>{if(p.hesap===id)L.push({tarih:p.tarih,t:num(p.tutar),ad:pname(patient(v.patientId)),sub:'Tahsilat · '+((v.hizmetAd||[]).join(', ')||'ziyaret')+(p.tarih!==v.tarih?' ('+fd(v.tarih)+' ziyareti)':''),act:`data-act="go" data-p="patient" data-id="${v.patientId}"`});}));
+  S.visits.forEach(v=>(v.pays||[]).forEach(p=>{if(p.hesap===id)L.push({tarih:p.tarih,t:num(p.tutar),ad:pname(patient(v.patientId))+(p.doviz?' · '+fx(p.doviz.tutar,p.doviz.cur):''),sub:'Tahsilat · '+((v.hizmetAd||[]).join(', ')||'ziyaret')+(p.tarih!==v.tarih?' ('+fd(v.tarih)+' ziyareti)':''),act:`data-act="go" data-p="patient" data-id="${v.patientId}"`});}));
   S.expenses.forEach(e=>{if(e.hesap===id)L.push({tarih:e.tarih,t:-num(e.tutar),ad:e.kategori,sub:e.aciklama||'',act:`data-act="expEdit" data-id="${e.id}"`});});
   S.purchases.forEach(p=>{if(p.hesap===id)L.push({tarih:p.tarih,t:-num(p.tutar),ad:'Depo alımı',sub:p.ad||'',act:`data-act="purEdit" data-id="${p.id}"`});});
   S.extPay.forEach(e=>{if(e.hesap===id)L.push({tarih:e.tarih,t:-num(e.tutar),ad:e.tip==='lab'?'ULTRALAB ödemesi':'Hemşire: '+e.ad,sub:e.not||'',act:`data-act="payEdit" data-id="${e.id}"`});});
@@ -1965,6 +2019,24 @@ const A2={
         if(GKOUT.includes(v.sonuc))p.aramaYok={sebep:lab,tarih:today()};
         save();render(true);toast('Kaydedildi');
       }});},
+  'v-cur':async d=>{
+    const c=d.c;if(c===(V.cur||'TRY'))return;
+    if(c==='TRY'){V.cur='TRY';V.ucretAuto=false;V.odenenAuto=false;render(true);return;}
+    V.cur=c;
+    if(!S.kur||!S.kur[c]||S.kur[c].tarih!==today()){toast('Güncel kur çekiliyor...');await fetchKur();}
+    const k=kurOf(c);V.kur=k?ns(k):'';
+    V.ducret=k&&num(V.ucret)?ns(Math.round(num(V.ucret)/k)):'';V.dodenen=V.ducret;V.dodenenAuto=true;
+    vFx();render(true);
+    if(!k)toast('Kur çekilemedi (internet yok olabilir). Kuru elle yaz.');
+  },
+  kurFetch:async()=>{toast('Kur çekiliyor...');const ok=await fetchKur();
+    if(!ok){toast('Kur çekilemedi. İnternet yok olabilir; kuru elle yazabilirsin.');return;}
+    if(R.page==='visit'&&V&&V.cur&&V.cur!=='TRY'){V.kur=ns(kurOf(V.cur));vFx();}
+    render(true);toast('Kur güncellendi: 1 $ = '+ns(kurOf('USD'))+' ₺, 1 € = '+ns(kurOf('EUR'))+' ₺');},
+  kurManual:()=>openForm({title:'Kuru elle gir',note:'Örneğin bankanın veya döviz bürosunun verdiği kur. Sadece bundan sonraki kayıtlarda kullanılır.',
+    fields:[{k:'USD',label:'1 $ = kaç TL?',type:'num',value:kurOf('USD')?ns(kurOf('USD')):''},{k:'EUR',label:'1 € = kaç TL?',type:'num',value:kurOf('EUR')?ns(kurOf('EUR')):''}],
+    onSave:v=>{const u=num(v.USD),e=num(v.EUR);if(!(u>0)&&!(e>0)){toast('En az bir kur yaz');return false;}S.kur=S.kur||{};
+      if(u>0)S.kur.USD={kur:u,tarih:today(),kaynak:'elle',elle:true};if(e>0)S.kur.EUR={kur:e,tarih:today(),kaynak:'elle',elle:true};save();render(true);}}),
   balNew:d=>balForm(accById(d.id),null),
   balEdit:d=>{const b=(S.balAdj||[]).find(x=>x.id===d.id);if(b)balForm(accById(b.hesap),b);},
   trNew:d=>trForm(null,d.id),
@@ -2052,10 +2124,11 @@ const A={
   pay:d=>{
     const vs=S.visits.filter(v=>v.patientId===d.id&&num(v.ucret)>num(v.odenen)).sort((a,b)=>a.tarih.localeCompare(b.tarih));
     const borc=vs.reduce((a,v)=>a+num(v.ucret)-num(v.odenen),0);
-    openForm({title:'Ödeme al',note:'Kalan borç: <b>'+money(borc)+'</b>. Tutar en eski borçtan başlayarak düşülür.',fields:[{k:'tutar',label:'Alınan tutar (TL)',type:'num',value:ns(round2(borc))},{k:'tarih',label:'Ödeme tarihi',type:'date',value:today()},{k:'hesap',label:'Para nereye geldi?',type:'select',options:accOpts(false,true),value:defHesap()}],
+    openForm({title:'Ödeme al',note:'Kalan borç: <b>'+money(borc)+'</b>. Tutar en eski borçtan başlayarak düşülür.',fields:[{k:'cur',label:'Para birimi',type:'select',options:Object.keys(CUR).map(c=>[c,CUR[c].s+' '+CUR[c].ad]),value:'TRY'},{k:'tutar',label:'Alınan tutar (seçtiğin para biriminde)',type:'num',value:ns(round2(borc))},{k:'kur',label:'Kur (dolar/euro ise): 1 birim = kaç TL',type:'num',value:''},{k:'tarih',label:'Ödeme tarihi',type:'date',value:today()},{k:'hesap',label:'Para nereye geldi?',type:'select',options:accOpts(false,true),value:defHesap()}],
       onSave:v=>{let t=num(v.tutar);if(t<=0){toast('Tutar yaz');return false;}
+        let dv=null;if(v.cur!=='TRY'){const k=num(v.kur)||kurOf(v.cur);if(!(k>0)){toast('Kur yaz');return false;}dv={cur:v.cur,kur:k};t=round2(t*k);}
         for(const x of vs){if(t<=0)break;const need=round2(num(x.ucret)-num(x.odenen)),p=round2(Math.min(need,t));if(p<=0)continue;x.odenen=round2(num(x.odenen)+p);t=round2(t-p);
-          if(!x.pays)x.pays=[];x.pays.push({id:uid(),tarih:v.tarih||today(),hesap:v.hesap,tutar:p});}
+          if(x.doviz&&num(x.doviz.kur)>0)x.doviz.odenen=round2(x.odenen/x.doviz.kur);if(!x.pays)x.pays=[];const pe={id:uid(),tarih:v.tarih||today(),hesap:v.hesap,tutar:p};if(dv)pe.doviz={cur:dv.cur,tutar:round2(p/dv.kur),kur:dv.kur};x.pays.push(pe);}
         if(v.hesap)S.settings.lastHesap=v.hesap;save();render(true);toast('Ödeme kaydedildi');}});
   },
   // ziyaret
@@ -2064,6 +2137,7 @@ const A={
     const v=S.visits.find(x=>x.id===d.id);if(!v)return;
     V=JSON.parse(JSON.stringify(v));V.ucretAuto=false;V.odenenAuto=false;VQ='';V.tests=V.tests||[];
     ['ucret','odenen','hemsireUcret','hizmetBedeli','maliyet'].forEach(k=>{V[k]=V[k]?ns(V[k]):'';});
+    if(v.doviz){V.cur=v.doviz.cur;V.ducret=ns(v.doviz.ucret);V.dodenen=ns(v.doviz.odenen);V.kur=ns(v.doviz.kur);V.dodenenAuto=false;}else V.cur='TRY';
     {const ps=v.pays||[];V.hesap=ps.length&&accById(ps[ps.length-1].hesap)?ps[ps.length-1].hesap:defHesap();}
     V.svcN=V.svcN||{};V.elle=!!V.elle&&!V.eski;V.kontrol=V.kontrol||'';V.sikayet=V.sikayet||'';V.olcum=V.olcum||'';V.not=V.not||'';
     H.push(R);R={page:'visit'};render();
@@ -2152,6 +2226,11 @@ const A={
       hizmetBedeli:num(V.hizmetBedeli),ucret:num(V.ucret),odenen:num(V.odenen),hemsireUcret:nurse?num(V.hemsireUcret):0,
       labOdendi:!!V.labOdendi,sikayet:V.sikayet,olcum:V.olcum,kontrol:V.kontrol,not:V.not
     };
+    if(V.cur&&V.cur!=='TRY'){
+      if(!(num(V.kur)>0)){toast('Kur yaz veya internetten çek');return;}
+      v.doviz={cur:V.cur,ucret:num(V.ducret),odenen:num(V.dodenen),kur:num(V.kur)};v.ucret=round2(v.doviz.ucret*v.doviz.kur);v.odenen=round2(v.doviz.odenen*v.doviz.kur);
+      {const o=V.id?S.visits.find(x=>x.id===V.id):null;if(o&&o.doviz&&o.doviz.cur===v.doviz.cur&&num(o.doviz.kur)===v.doviz.kur){if(num(o.doviz.ucret)===v.doviz.ucret)v.ucret=num(o.ucret);if(num(o.doviz.odenen)===v.doviz.odenen)v.odenen=num(o.odenen);}}
+    }
     if(V.eski){v.eski=true;v.maliyet=num(V.maliyet);}
     else if(V.elle){v.elle=true;v.maliyet=num(V.maliyet);}
     const old=V.id?S.visits.find(x=>x.id===V.id):null;
@@ -2160,7 +2239,7 @@ const A={
       const pays=old&&old.pays?old.pays.map(x=>Object.assign({},x)):[];
       const base=old?(old.pays?old.pays.reduce((a,x)=>a+num(x.tutar),0):num(old.odenen)):0;
       let diff=round2(v.odenen-base);
-      if(diff>0)pays.push({id:uid(),tarih:old&&today()>v.tarih?today():v.tarih,hesap:V.hesap,tutar:diff});
+      if(diff>0){const pe={id:uid(),tarih:old&&today()>v.tarih?today():v.tarih,hesap:V.hesap,tutar:diff};if(v.doviz)pe.doviz={cur:v.doviz.cur,tutar:round2(diff/v.doviz.kur),kur:v.doviz.kur};pays.push(pe);}
       while(diff<0&&pays.length){const l=pays[pays.length-1],t=num(l.tutar);if(t<=-diff){pays.pop();diff=round2(diff+t);}else{l.tutar=round2(t+diff);diff=0;}}
       if(diff===0&&pays.length===1&&pays[0].hesap!==V.hesap)pays[0].hesap=V.hesap;
       if(!old)pays.forEach(x=>x.tarih=v.tarih);
@@ -2398,6 +2477,7 @@ document.addEventListener('change',e=>{
   const t=e.target;
   if(t.dataset&&t.dataset.v==='kim'){V.kim=t.value;const n=S.nurses.find(x=>x.id===t.value);V.kimAd=n?n.ad:'';render(true);return;}
   if(t.dataset&&t.dataset.v==='hesap'&&V){V.hesap=t.value;return;}
+  if(t.id==='f_cur'&&$('#f_kur')){$('#f_kur').value=t.value==='TRY'?'':(kurOf(t.value)?ns(kurOf(t.value)):'');}
   if(t.id==='f_sonuc'&&$('#f_tarih')){$('#f_tarih').value=t.value==='randevu'?addDays(today(),1):t.value==='dusunecek'?addDays(today(),30):t.value==='gerekyok'?addDays(today(),90):'';}
   if(t.dataset&&t.dataset.ci!==undefined&&CI.rows){
     const r=CI.rows[+t.dataset.ci];let k=t.value;
