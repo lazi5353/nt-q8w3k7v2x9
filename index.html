@@ -80,6 +80,9 @@ nav.tabs button.on{color:var(--p);font-weight:700}
 img.prev{max-width:100%;border-radius:8px;display:block;margin:0 auto}
 a.tel{color:var(--p);text-decoration:none;font-weight:600}
 .sum{background:var(--p2)}
+.hb2{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:14px}.hb2 .hl{flex:0 0 36%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hb2 .ht{flex:1;background:#eef1f3;border-radius:5px;height:12px;overflow:hidden}.hb2 .ht i{display:block;height:100%;background:var(--p);border-radius:5px}.hb2 .ht i.neg{background:var(--red)}
+.hb2 .hv{flex:0 0 auto;min-width:70px;text-align:right;color:var(--m);font-size:13px}
 .sum .tb td{border-color:#cfe3ea}
 </style>
 </head>
@@ -99,7 +102,7 @@ a.tel{color:var(--p);text-decoration:none;font-weight:600}
 <script>
 'use strict';
 /* ============ Yardımcılar ============ */
-const VERSION='2.1';
+const VERSION='2.5';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
@@ -165,7 +168,7 @@ function defaults(){
   const st=(id,ad,tip)=>({id,ad,tip,adet:0,birim:0,minAdet:0,skt:''});
   return {
     v:1,patients:[],visits:[],plans:[],calls:[],files:[],purchases:[],expenses:[],nurses:[],extPay:[],adj:[],
-    tests:[],testGroups:[],accounts:[{id:'h_nakit',ad:'Nakit',tip:'nakit'},{id:'h_kisisel',ad:'Kişisel kart / cebimden',tip:'kisisel'}],catRules:[],notDup:[],
+    tests:[],testGroups:[],accounts:[{id:'h_nakit',ad:'Nakit',tip:'nakit'},{id:'h_kisisel',ad:'Kişisel kart / cebimden',tip:'kisisel'}],catRules:[],notDup:[],balAdj:[],transfers:[],
     stock:[
       st('sr_iz250','İzotonik 250','serum'),st('sr_iz500','İzotonik 500','serum'),
       st('sr_rl250','Ringer Laktat 250','serum'),st('sr_rl500','Ringer Laktat 500','serum'),
@@ -222,6 +225,7 @@ function periodStats(y,m){
   r.visitCost=r.ilac+r.lab+r.hems+r.eski+r.elle;
   r.tmal=r.visitCost+r.giderTop+r.adjM;
   r.net=r.ucret-r.tmal;
+  r.cek=0;(S.transfers||[]).forEach(tr=>{if(inP(tr.tarih)&&isOwnerOut(tr)){const f=accById(tr.from);if(!f||f.tip!=='kisisel')r.cek+=num(tr.tutar);}});
   return r;
 }
 function applyStock(v,sign){
@@ -233,7 +237,7 @@ function applyStock(v,sign){
 let S,R={page:'home'},H=[],V=null,MF=null,PK=null,SD=null,BK=null,P={tab:'visits'},GD=null,LX=null,VQ='';
 const pname=p=>p?((p.ad||'')+' '+(p.soyad||'')).trim():'(silinmiş hasta)';
 const patient=id=>S.patients.find(p=>p.id===id);
-const TABMAP={home:'home',patients:'patients',patient:'patients',visit:'patients',stock:'stock',lab:'lab',fin:'fin',more:'more',expenses:'more',nurses:'more',services:'more',backup:'more',import:'more',dups:'patients',debts:'home',recent:'home',analysis:'more',accounts:'fin',account:'fin',cardimp:'fin'};
+const TABMAP={home:'home',patients:'patients',patient:'patients',visit:'patients',stock:'stock',lab:'lab',fin:'fin',more:'more',expenses:'more',nurses:'more',services:'more',backup:'more',import:'more',dups:'patients',debts:'home',recent:'home',analysis:'more',tpls:'more',accounts:'fin',account:'fin',cardimp:'fin'};
 
 function render(keep){
   let pg;
@@ -243,7 +247,7 @@ function render(keep){
     case 'fin':pg=pFin();break;case 'more':pg=pMore();break;case 'expenses':pg=pExpenses();break;
     case 'nurses':pg=pNurses();break;case 'services':pg=pServices();break;case 'backup':pg=pBackup();break;case 'import':pg=pImport();break;
     case 'dups':pg=pDups();break;case 'debts':pg=pDebts();break;case 'recent':pg=pRecent();break;case 'analysis':pg=pAnalysis();break;
-    case 'accounts':pg=pAccounts();break;case 'account':pg=pAccount();break;case 'cardimp':pg=pCardImp();break;
+    case 'tpls':pg=pTpls();break;case 'accounts':pg=pAccounts();break;case 'account':pg=pAccount();break;case 'cardimp':pg=pCardImp();break;
     default:pg=pHome();
   }
   $('#app').innerHTML=`<header class="top">${pg.back?'<button class="hb" data-act="back">‹ Geri</button>':''}<h1>${esc(pg.t)}</h1>${pg.right||''}</header><main>${pg.h}</main>`;
@@ -360,11 +364,17 @@ function pHome(){
   h+=section('📦 Azalan stok',low.map(i=>`<div class="card alert item" data-act="stockEdit" data-id="${i.id}"><div class="grow"><b>${esc(i.ad)}</b></div><div class="red"><b>${i.adet}</b> <span class="muted">/ uyarı ${i.minAdet}</span></div></div>`));
   const exp=S.stock.filter(i=>i.skt&&num(i.adet)>0&&dayDiff(t,i.skt)<=num(S.settings.sktDays)).sort((a,b)=>a.skt.localeCompare(b.skt));
   h+=section('⏳ Son kullanma tarihi',exp.map(i=>{const d=dayDiff(t,i.skt);return `<div class="card ${d<0?'danger':'alert'} item" data-act="stockEdit" data-id="${i.id}"><div class="grow"><b>${esc(i.ad)}</b><div class="muted">SKT ${fd(i.skt)} · ${i.adet} adet</div></div><span class="badge ${d<0?'red':'org'}">${d<0?'geçti':d+' gün'}</span></div>`;}));
-  // son ziyaretler
-  const rv=recentVisits();
-  if(rv.length)h+=`<h2>🕘 Son ziyaretler</h2>${rv.slice(0,5).map(recentRow).join('')}<button class="btn gray full" data-act="go" data-p="recent">Tümünü gör (${rv.length})</button>`;
   // aylık özet
   h+=`<h2>${MN[m]} ${y} özeti</h2><div class="card"><div class="row"><div><div class="muted">Ziyaret</div><div class="big">${st.n}</div></div><div><div class="muted">Alınan ücret</div><div class="big" style="font-size:20px">${money(st.ucret)}</div></div></div><div style="margin-top:8px" class="muted">Net kâr</div><div class="big ${st.net<0?'red':'grn'}">${money(st.net)}</div>${st.labBorc>0?`<div class="muted" style="margin-top:6px">Ödenmemiş laboratuvar borcu: ${money(st.labBorc)}</div>`:''}</div>`;
+  // ay ay ziyaretler (en yeniden eskiye)
+  if(S.visits.length){
+    const now=ymNow(),hm=HM&&HM<=now?HM:now,mv=recentVisits().filter(v=>v.tarih.slice(0,7)===hm);
+    const tu=mv.reduce((a,v)=>a+num(v.ucret),0),bo=mv.reduce((a,v)=>a+visitBorc(v),0);
+    h+=`<h2 id="hm_top">🕘 Ziyaretlerim</h2><div class="card"><div class="item"><button class="btn sm gray" data-act="hmNav" data-d="-1">‹ Önceki</button><div class="grow" style="text-align:center"><b>${ymTitle(hm)}</b></div><button class="btn sm gray" data-act="hmNav" data-d="1" ${hm>=now?'disabled style="opacity:.35"':''}>Sonraki ›</button></div>
+    <label>Ay seç<input type="month" id="hm_pick" value="${hm}" max="${now}"></label>
+    <div class="muted" style="margin-top:8px">${mv.length} ziyaret · alınan ${money(tu)}${bo>0?` · <span class="red">kalan borç ${money(bo)}</span>`:''}</div>${hm!==now?'<button class="btn sm gray full" style="margin-top:8px" data-act="hmNow">Bu aya dön</button>':''}</div>`;
+    h+=mv.length?mv.map(recentRow).join(''):'<div class="empty">Bu ay ziyaret yok</div>';
+  }
   return {t:'Ana Sayfa',h};
 }
 
@@ -741,6 +751,7 @@ function breakdown(s){
   h+=r('Ödenmemiş laboratuvar borcu',money(s.labBorc));
   if(s.infoHems)h+=r('Hemşirelere ödeme (zaten maliyette)',money(s.infoHems));
   if(s.infoLab)h+=r('ULTRALAB ödemesi (zaten maliyette)',money(s.infoLab));
+  if(s.cek)h+=r('Kendine aktardığın (gider değil)',money(s.cek));
   return h+'</table>';
 }
 function nurseStats(y,m){
@@ -1311,7 +1322,7 @@ function pMore(){
 }
 
 /* ============ 2.0: Hesaplar, analiz, birleştirme, son ziyaretler ============ */
-let CI={hesap:null,text:'',rows:null,mem:true};
+let CI={hesap:null,text:'',rows:null,mem:true},HM=null;
 function vIndex(){const m=new Map();S.visits.forEach(v=>{let a=m.get(v.patientId);if(!a){a=[];m.set(v.patientId,a);}a.push(v);});return m;}
 const accById=id=>S.accounts.find(a=>a.id===id);
 const accIcon=a=>a&&a.tip==='kart'?'💳':a&&a.tip==='banka'?'🏦':a&&a.tip==='kisisel'?'👤':'💵';
@@ -1415,7 +1426,8 @@ function vType(v,t){
 }
 function patStats(t){
   const VI=vIndex(),td=today(),out=[];
-  const calls=new Map();S.calls.forEach(c=>{let o=calls.get(c.patientId);if(!o){o={last:'',open:false};calls.set(c.patientId,o);}if(c.done&&c.doneAt&&c.doneAt>o.last)o.last=c.doneAt;if(!c.done)o.open=true;});
+  const calls=new Map();S.calls.forEach(c=>{let o=calls.get(c.patientId);if(!o){o={last:'',son:'',open:false};calls.set(c.patientId,o);}if(c.done&&c.doneAt&&c.doneAt>=o.last){o.last=c.doneAt;o.son=c.sonuc||'';}if(!c.done)o.open=true;});
+  const plans=new Set(S.plans.filter(x=>!x.done&&x.tarih>=td).map(x=>x.patientId));
   S.patients.forEach(p=>{
     const vs=(VI.get(p.id)||[]).filter(v=>v.tarih&&vType(v,t));if(!vs.length)return;
     const ds=[...new Set(vs.map(v=>v.tarih))].sort();
@@ -1423,8 +1435,8 @@ function patStats(t){
     const eps=[];ds.forEach(d=>{if(!eps.length||dayDiff(eps[eps.length-1].last,d)>3)eps.push({start:d,last:d});else eps[eps.length-1].last=d;});
     const gaps=[];for(let i=1;i<eps.length;i++)gaps.push(dayDiff(eps[i-1].start,eps[i].start));
     const sg=gaps.slice().sort((a,b)=>a-b),med=sg.length?sg[Math.floor((sg.length-1)/2)]:null;
-    const last=ds[ds.length-1],c=calls.get(p.id)||{last:'',open:false};
-    out.push({p,n:vs.length,eps:eps.length,med,last,first:ds[0],since:dayDiff(last,td),ciro:vs.reduce((a,v)=>a+num(v.ucret),0),lastCall:c.last,openCall:c.open});
+    const last=ds[ds.length-1],c=calls.get(p.id)||{last:'',son:'',open:false};
+    out.push({p,n:vs.length,eps:eps.length,med,last,first:ds[0],since:dayDiff(last,td),ciro:vs.reduce((a,v)=>a+num(v.ucret),0),lastCall:c.last,lastSonuc:c.son,openCall:c.open,openPlan:plans.has(p.id)});
   });
   return out;
 }
@@ -1443,40 +1455,281 @@ function anRow(x,extra,badge){
   return `<div class="card"><div class="item"><div class="grow" data-act="go" data-p="patient" data-id="${p.id}"><b>${esc(pname(p))}</b>${badge||''}<div class="muted">${extra}</div>${x.lastCall?`<div class="muted">📞 Son arama: ${fd(x.lastCall)}</div>`:''}${x.openCall?'<span class="badge org">aranacaklar listesinde</span>':''}</div></div>
   <div class="btns" style="margin-top:6px">${p.tel?`<a class="btn sm gray" href="tel:${esc(p.tel)}">📞 Ara</a>`:''}<button class="btn sm gray" data-act="anCalled" data-id="${p.id}">Aradım</button><button class="btn sm" data-act="anRemind" data-id="${p.id}">Hatırlat</button></div></div>`;
 }
-function pAnalysis(){
-  const tab=R.at||'kayip',ty=R.aty||'all',td=today();
-  const tabs=[['kayip','Kaybedilen'],['duzenli','Düzenli'],['sik','En sık'],['bolge','Bölgeler']];
-  let h=`<div class="seg">${tabs.map(t=>`<button class="${tab===t[0]?'on':''}" data-act="anTab" data-t="${t[0]}">${t[1]}</button>`).join('')}</div>`;
-  if(tab!=='bolge')h+=`<div class="chips" style="margin-bottom:8px">${ATYPES.map(t=>`<button class="chip ${ty===t[0]?'on':''}" data-act="anType" data-t="${t[0]}">${t[1]}</button>`).join('')}</div>`;
-  const st=patStats(tab==='bolge'?'all':ty);
-  if(tab==='kayip'){
+const pct=(a,b)=>b?Math.round((a-b)/Math.abs(b)*100):null;
+const pctTxt=(a,b)=>{const p=pct(a,b);if(p==null)return '';return `<span class="${p<0?'red':'grn'}" style="font-size:13px">${p<0?'▼':'▲'} %${Math.abs(p)}</span>`;};
+function hbar(label,v,max,txt,cls){const w=max>0?Math.max(2,Math.round(v/max*100)):0;return `<div class="hb2"><div class="hl">${label}</div><div class="ht"><i class="${cls||''}" style="width:${v>0?w:0}%"></i></div><div class="hv">${txt}</div></div>`;}
+const ymOf=(y,m)=>y+'-'+pad(m+1);
+const daysInMonth=ym=>new Date(+ym.slice(0,4),+ym.slice(5,7),0).getDate();
+function anPeriod(){const k=R.ap||'12';const t=today();return k==='12'?{k,from:ymd(new Date(+t.slice(0,4),+t.slice(5,7)-12,1)),lab:'Son 12 ay'}:k==='y'?{k,from:t.slice(0,4)+'-01-01',lab:'Bu yıl'}:{k,from:'0000',lab:'Tüm zamanlar'};}
+function periodChips(){const cur=R.ap||'12';return `<div class="chips" style="margin-bottom:8px">${[['12','Son 12 ay'],['y','Bu yıl'],['all','Tüm zamanlar']].map(x=>`<button class="chip ${cur===x[0]?'on':''}" data-act="anPer" data-k="${x[0]}">${x[1]}</button>`).join('')}</div>`;}
+const SVCAT=[['serum','Serum'],['kan','Kan / tahlil'],['enj','Enjeksiyon'],['damar','Damar yolu']];
+const vCat=v=>{for(const [k,l] of SVCAT)if(vType(v,k))return l;return 'Diğer';};
+function stockForecast(){
+  const from=addDays(today(),-90),use={};
+  S.visits.forEach(v=>{if(v.eski||isNurse(v)||!v.tarih||v.tarih<from)return;(v.items||[]).forEach(i=>{use[i.id]=(use[i.id]||0)+num(i.adet);});});
+  const first=S.visits.filter(v=>!v.eski&&v.tarih).map(v=>v.tarih).sort()[0];
+  const span=Math.max(14,Math.min(90,first?dayDiff(first,today())+1:90));
+  return S.stock.filter(s=>use[s.id]>0).map(s=>{const perDay=use[s.id]/span;return {s,used:use[s.id],perMonth:round2(perDay*30),days:perDay>0?Math.floor(Math.max(0,num(s.adet))/perDay):null};}).sort((a,b)=>a.days-b.days);
+}
+function insights(st){
+  const out=[],t=today(),ym=t.slice(0,7),pm=ymAdd(ym,-1);
+  const cur=periodStats(+ym.slice(0,4),+ym.slice(5,7)-1),prev=periodStats(+pm.slice(0,4),+pm.slice(5,7)-1);
+  const day=+t.slice(8,10),dim=daysInMonth(ym);
+  if(prev.ucret>0&&day>=7){const fc=cur.ucret/day*dim,p=pct(fc,prev.ucret);if(p!=null&&Math.abs(p)>=10)out.push({ic:p<0?'📉':'📈',t:`Bu ay bu hızla giderse ciro <b>${money(Math.round(fc))}</b> olur, geçen aydan <b>%${Math.abs(p)} ${p<0?'düşük':'yüksek'}</b>.`,go:'ozet'});}
+  const due=st.filter(x=>x.eps>=3&&x.med>=7&&x.med<=400&&x.since>=x.med*0.85&&!x.p.aramaYok&&!x.openCall);
+  if(due.length)out.push({ic:'⏰',t:`<b>${due.length} düzenli hastanın</b> tekrar çağırma zamanı geldi veya geçti.`,go:'gk',sub:'gecikmis'});
+  const lost=st.filter(x=>x.eps>=2&&x.since>180&&!x.p.aramaYok&&(!x.lastCall||x.lastCall<x.last)).sort((a,b)=>b.ciro-a.ciro);
+  if(lost.length)out.push({ic:'🔁',t:`6 aydan uzun süredir çağırmayan <b>${lost.length} eski hastan</b> var. En değerli 5'i toplam <b>${money(lost.slice(0,5).reduce((a,x)=>a+x.ciro,0))}</b> getirmişti.`,go:'gk',sub:'kayip'});
+  const nf=st.filter(x=>x.eps===1&&x.since>=21&&x.since<=120&&!x.lastCall&&!x.p.aramaYok);
+  const pq=gkQueue(st).length;
+  const bdn=st.filter(x=>x.p.dogum&&!x.p.aramaYok&&daysToBday(x.p.dogum)<=7).length;
+  if(bdn)out.push({ic:'🎂',t:`Önümüzdeki 7 günde <b>${bdn} hastanın</b> doğum günü var. Kısa bir tebrik mesajı at.`,go:'gk',sub:'dogum'});
+  if(pq)out.unshift({ic:'🔥',t:`Geri kazanma listesinde <b>${pq} hasta</b> sırada. Bugün en değerli 3-5 kişiyi ara.`,go:'gk',sub:'oncelik'});
+  if(nf.length)out.push({ic:'👋',t:`Son 4 ayda ilk kez gelip bir daha çağırmayan <b>${nf.length} hasta</b> var. Bir "nasılsınız" araması yeniden çağırmalarını sağlayabilir.`,go:'gk',sub:'tek'});
+  const dl=debtList(),old=dl.filter(x=>dayDiff(x.ilk,t)>90);
+  if(old.length)out.push({ic:'💰',t:`<b>${old.length} hastanın</b> borcu 90 günü geçti, toplam <b>${money(old.reduce((a,x)=>a+x.borc,0))}</b>.`,go:'debts'});
+  const fc=stockForecast().filter(x=>x.days!=null&&x.days<=21);
+  if(fc.length)out.push({ic:'📦',t:`Kullanım hızına göre yakında bitecek: ${fc.slice(0,4).map(x=>`<b>${esc(x.s.ad)}</b> (${x.days} gün)`).join(', ')}.`,go:'hizmet'});
+  const lb=S.visits.filter(v=>visitCalc(v).labCost>0&&!v.labOdendi);
+  if(lb.length)out.push({ic:'🧪',t:`Laboratuvara ödenmemiş <b>${lb.length} ziyaret</b> var (${money(lb.reduce((a,v)=>a+visitCalc(v).labCost,0))}).`,go:'fin'});
+  // en kârlı hizmet (son 12 ay)
+  const from=ymd(new Date(+t.slice(0,4),+t.slice(5,7)-12,1)),cs={};
+  S.visits.filter(v=>v.tarih>=from).forEach(v=>{const c=vCat(v),k=visitCalc(v);const o=cs[c]||(cs[c]={n:0,kar:0});o.n++;o.kar+=k.kar;});
+  const best=Object.entries(cs).filter(([,o])=>o.n>=5).sort((a,b)=>b[1].kar/b[1].n-a[1].kar/a[1].n)[0];
+  if(best)out.push({ic:'⭐',t:`Son 12 ayda ziyaret başına en çok kazandıran hizmet: <b>${esc(best[0])}</b> (ortalama ${money(best[1].kar/best[1].n)} kâr).`,go:'hizmet'});
+  return out;
+}
+function anOzet(st){
+  const t=today(),ym=t.slice(0,7),pm=ymAdd(ym,-1),ly=ymAdd(ym,-12);
+  const P=s=>periodStats(+s.slice(0,4),+s.slice(5,7)-1);
+  const c=P(ym),p=P(pm),l=P(ly);
+  const firstV=new Map();S.visits.forEach(v=>{if(!v.tarih)return;const f=firstV.get(v.patientId);if(!f||v.tarih<f)firstV.set(v.patientId,v.tarih);});
+  const newIn=m=>[...firstV.values()].filter(d=>d.slice(0,7)===m).length;
+  const avg=s=>s.n?s.ucret/s.n:0;
+  let h='';
+  const ins=insights(st);
+  h+=`<h2>Bugün bilmen gerekenler</h2>`+(ins.length?ins.map(x=>`<div class="card item" data-act="anGo" data-t="${x.go}" data-s="${x.sub||''}"><div style="font-size:22px">${x.ic}</div><div class="grow">${x.t}</div><div class="muted">›</div></div>`).join(''):'<div class="card muted">Şu an dikkat edilecek bir şey yok 👍</div>');
+  const day=+t.slice(8,10),dim=daysInMonth(ym),fcU=c.ucret/Math.max(1,day)*dim,fcN=c.net/Math.max(1,day)*dim;
+  const row=(lab,a,b,cc,f)=>`<tr><td>${lab}</td><td class="r"><b>${f(a)}</b></td><td class="r">${f(b)}<br>${pctTxt(a,b)}</td><td class="r">${f(cc)}<br>${pctTxt(a,cc)}</td></tr>`;
+  h+=`<h2>Ay karşılaştırması</h2><div class="card"><table class="tb"><tr><th></th><th class="r">${MS[+ym.slice(5,7)-1]} ${ym.slice(2,4)}<br><span class="muted" style="font-weight:400">bu ay</span></th><th class="r">${MS[+pm.slice(5,7)-1]} ${pm.slice(2,4)}<br><span class="muted" style="font-weight:400">geçen ay</span></th><th class="r">${MS[+ly.slice(5,7)-1]} ${ly.slice(2,4)}<br><span class="muted" style="font-weight:400">geçen yıl</span></th></tr>
+  ${row('Ziyaret',c.n,p.n,l.n,x=>x)}${row('Ciro',c.ucret,p.ucret,l.ucret,money)}${row('Net kâr',c.net,p.net,l.net,money)}${row('Ort. ücret',avg(c),avg(p),avg(l),money)}${row('Yeni hasta',newIn(ym),newIn(pm),newIn(ly),x=>x)}</table>
+  ${day<dim&&c.n?`<div class="note" style="margin-bottom:0">Bu ay ${day}. gündesin. Bu hızla ay sonunda ciro yaklaşık <b>${money(Math.round(fcU))}</b>, net kâr <b>${money(Math.round(fcN))}</b> olur.</div>`:''}</div>`;
+  // son 12 ay
+  const ms=[];for(let i=11;i>=0;i--){const m=ymAdd(ym,-i);const s=P(m);ms.push({m,s});}
+  const mx=Math.max(1,...ms.map(x=>x.s.ucret));
+  h+=`<h2>Son 12 ay ciro</h2><div class="card"><div class="chart" style="align-items:flex-end">${ms.map(x=>{const ht=Math.round(x.s.ucret/mx*90);return `<div class="col" data-act="anMonth" data-m="${x.m}"><div style="height:94px;display:flex;align-items:flex-end"><i style="height:${Math.max(ht,x.s.ucret>0?2:0)}px;${x.m===ym?'background:var(--p)':''}"></i></div><small>${MS[+x.m.slice(5,7)-1]}</small></div>`;}).join('')}</div>
+  <table class="tb" style="margin-top:8px"><tr><td>12 ay toplam ciro</td><td class="r">${money(ms.reduce((a,x)=>a+x.s.ucret,0))}</td></tr><tr><td>12 ay net kâr</td><td class="r grn">${money(ms.reduce((a,x)=>a+x.s.net,0))}</td></tr><tr><td>Aylık ortalama ciro</td><td class="r">${money(ms.reduce((a,x)=>a+x.s.ucret,0)/12)}</td></tr><tr><td>En iyi ay</td><td class="r">${(b=>b.s.ucret?ymTitle(b.m)+' · '+money(b.s.ucret):'—')(ms.slice().sort((a,b)=>b.s.ucret-a.s.ucret)[0])}</td></tr></table></div>`;
+  // hasta tabanı
+  const act90=st.filter(x=>x.since<=90).length,rep=st.filter(x=>x.eps>=2).length;
+  h+=`<h2>Hasta tabanı</h2><div class="card"><table class="tb"><tr><td>Ziyareti olan hasta</td><td class="r"><b>${st.length}</b></td></tr><tr><td>Son 3 ayda çağıran (aktif)</td><td class="r">${act90}</td></tr><tr><td>En az 2 kez çağıran (sadık)</td><td class="r">${rep} <span class="muted">(%${st.length?Math.round(rep/st.length*100):0})</span></td></tr><tr><td>Hasta başına ortalama getiri</td><td class="r">${money(st.length?st.reduce((a,x)=>a+x.ciro,0)/st.length:0)}</td></tr></table>
+  <div class="muted" style="margin-top:6px">Sadık hasta oranı yükseldikçe iş daha az yeni hasta bulmaya bağımlı olur.</div></div>`;
+  // borç yaşı
+  const dl=debtList();if(dl.length){
+    const bk=[[0,30,'0–30 gün'],[31,90,'31–90 gün'],[91,1e9,'90 günden eski']].map(([a,b,l])=>{let s=0;S.visits.forEach(v=>{const bo=visitBorc(v);if(bo>0){const d=dayDiff(v.tarih,t);if(d>=a&&d<=b)s+=bo;}});return [l,s];});
+    const mxb=Math.max(1,...bk.map(x=>x[1]));
+    h+=`<h2>Alacakların yaşı</h2><div class="card" data-act="go" data-p="debts">${bk.map(([l,s],i)=>hbar(l,s,mxb,money(s),i===2?'neg':'')).join('')}<div class="muted" style="margin-top:6px">Eski borçların tahsil edilme ihtimali düşer. Listeyi görmek için dokun.</div></div>`;
+  }
+  return h;
+}
+const agoDir=d=>d<45?d+' gündür':d<730?Math.round(d/30)+' aydır':(Math.round(d/36.5)/10).toString().replace('.',',')+' yıldır';
+/* ---------- Geri kazanma ---------- */
+const GKSONUC={randevu:'✅ Randevu verdi / çağıracak',dusunecek:'🤔 Düşünecek, sonra tekrar ara',ulasilamadi:'📵 Ulaşılamadı / açmadı',gerekyok:'🙅 Şu an ihtiyacı yok',baska:'🏥 Başka yerden hizmet alıyor',tasindi:'🚚 Taşındı',vefat:'🕊 Vefat etti',mesaj:'💬 Mesaj gönderildi'};
+const GKOUT=['baska','tasindi','vefat'];
+const GKCOOL={ulasilamadi:7,mesaj:14,gerekyok:90};
+const DEFTPL='Merhaba {ad}, uzun zamandır görüşemedik, nasılsınız? Serum, kan alma, enjeksiyon gibi bir ihtiyacınız olursa evinize gelebilirim. Sağlıklı günler dilerim.';
+const DEFTPLS=[
+ {id:'duzenli',ad:'⏰ Düzenli hasta, gecikti',metin:'Merhaba {ad}, nasılsınız? En son {sure} önce {hizmet} için gelmiştim. Genelde bu aralıkta bir ihtiyacınız oluyordu, isterseniz bu hafta size uygun bir gün ayarlayabilirim. Sağlıklı günler dilerim.\n{imza}'},
+ {id:'uzun',ad:'🔁 Uzun süredir çağırmayan',metin:'Merhaba {ad}, uzun zamandır görüşemedik, umarım iyisinizdir. Serum, kan alma, enjeksiyon gibi bir ihtiyacınız olursa evinize gelmeye devam ediyorum. Bir mesajınız yeterli. Sağlıklı günler dilerim.\n{imza}'},
+ {id:'tek',ad:'👋 Bir kez çağırdı (memnuniyet)',metin:'Merhaba {ad}, {sure} önce size gelmiştim. Geçmiş olsun, şimdi nasılsınız? Memnun kaldıysanız ileride de bana ulaşabilirsiniz, aklınıza takılan bir şey olursa her zaman yazabilirsiniz.\n{imza}'},
+ {id:'sadik',ad:'⭐ Sadık hasta (teşekkür)',metin:'Merhaba {ad}, bunca zamandır bana güvendiğiniz için çok teşekkür ederim. Nasılsınız? Size ve ailenize bir ihtiyaç olursa her zaman buradayım.\n{imza}'},
+ {id:'kan',ad:'🧪 Kontrol tahlili hatırlatma',metin:'Merhaba {ad}, son tahlilinizin üzerinden {sure} geçti. Kontrol tahlili yaptırmak isterseniz kanınızı evinizden alıp sonuçları size iletebilirim. Uygun olduğunuz günü yazmanız yeterli.\n{imza}'},
+ {id:'mevsim',ad:'🤧 Grip / mevsim dönemi',metin:'Merhaba {ad}, havalar değişti, grip ve halsizlik dönemi başladı. Kendinizi yorgun hissederseniz evinize gelip yardımcı olabilirim. Kendinize iyi bakın, sağlıklı günler.\n{imza}'},
+ {id:'bayram',ad:'🌙 Bayram tebriği',metin:'Merhaba {ad}, bayramınızı en içten dileklerimle kutlarım. Size ve sevdiklerinize sağlıklı, huzurlu nice bayramlar dilerim.\n{imza}'},
+ {id:'dogum',ad:'🎂 Doğum günü',metin:'Merhaba {ad}, doğum gününüzü kutlarım! Sağlık, huzur ve mutluluk dolu bir yıl dilerim.\n{imza}'}
+];
+const tpls=()=>S.settings.tpls&&S.settings.tpls.length?S.settings.tpls:DEFTPLS;
+function tplFill(t,p){
+  const last=S.visits.filter(v=>v.patientId===p.id&&v.tarih).map(v=>v.tarih).sort().pop();
+  const im=String(S.settings.imza||'').trim();
+  let m=String(t||'').replace(/\{ad\}/g,firstName(p)).replace(/\{adsoyad\}/g,pname(p)).replace(/\{hizmet\}/g,(lastSvc(p)||'ziyaret').toLocaleLowerCase('tr')).replace(/\{sure\}/g,last?agoTxt(dayDiff(last,today())):'bir süre');
+  m=im?m.replace(/\{imza\}/g,im):m.replace(/\s*\{imza\}/g,'');
+  return m.trim();
+}
+function tplAuto(p){
+  const x=patStats('all').find(z=>z.p.id===p.id);
+  const bd=p.dogum&&daysToBday(p.dogum)<=7;
+  if(bd)return 'dogum';
+  if(!x)return 'uzun';
+  const lastV=S.visits.filter(v=>v.patientId===p.id&&v.tarih).sort((a,b)=>b.tarih.localeCompare(a.tarih))[0];
+  if(lastV&&vType(lastV,'kan')&&!vType(lastV,'serum')&&x.since>=21)return 'kan';
+  if(x.eps>=3&&x.med>=7&&x.med<=400&&x.since>=x.med*0.85&&x.since<=x.med*4)return 'duzenli';
+  if(x.eps===1&&x.since<=120)return 'tek';
+  if(x.eps>=5&&x.since<120)return 'sadik';
+  return 'uzun';
+}
+function daysToBday(d){const t=today(),y=+t.slice(0,4);let b=y+d.slice(4);if(d.slice(5)==='02-29'&&!(y%4===0&&(y%100!==0||y%400===0)))b=y+'-03-01';let n=dayDiff(t,b);if(n<0){const b2=(y+1)+d.slice(4);n=dayDiff(t,b2);}return n;}
+const firstName=p=>String(p.ad||'').trim().split(/\s+/)[0]||'';
+const waNum=t=>{const d=tail10(t);return d.length===10?'90'+d:'';};
+// "15 günde bir", "2 ayda bir" gibi aralık; "300 gündür (yaklaşık 10 ay)" gibi süre
+const aralikTxt=d=>d<=10?'haftada bir':d<60?d+' günde bir':d<330?Math.round(d/30)+' ayda bir':'yılda bir';
+const gunTxt=d=>d+' gündür'+(d>=60?' (yaklaşık '+(d<730?Math.round(d/30)+' ay':(Math.round(d/36.5)/10).toString().replace('.',',')+' yıl')+')':'');
+function gkInfo(x){
+  const r=[];
+  const regLate=x.eps>=3&&x.med>=7&&x.med<=400&&x.since>x.med*1.25;
+  if(x.eps>=3&&x.med>=7&&x.med<=400&&x.since>=x.med*0.85)r.push(`Önceden <b>${aralikTxt(x.med)}</b> çağırıyordu, şimdi <b>${gunTxt(x.since)}</b> çağırmıyor`);
+  else if(x.eps>=2&&x.since>=90)r.push(`Önceden <b>${x.eps} kez</b> çağırdı${x.med?` (${aralikTxt(x.med)})`:''}, şimdi <b>${gunTxt(x.since)}</b> çağırmıyor`);
+  if(x.eps===1&&x.since>=21&&x.since<=120)r.push(`Bir kez çağırdı, şimdi <b>${gunTxt(x.since)}</b> çağırmıyor. Memnun kaldı mı diye sor`);
+  if(x.eps>=5)r.push(`Sadık hastan: toplam <b>${x.eps} kez</b> çağırdı`);
+  const dec=x.since<90?0.6:x.since<=365?1:x.since<=730?0.7:0.4;
+  return {r,sc:x.ciro*Math.min(1.5,0.5+x.eps/4)*dec*(regLate?1.5:1),regLate};
+}
+function gkEligible(x){
+  if(x.p.aramaYok||x.openCall||x.openPlan)return false;
+  if(x.lastCall){const cd=GKCOOL[x.lastSonuc]||30;if(dayDiff(x.lastCall,today())<cd)return false;}
+  return true;
+}
+const gkQueue=st=>st.filter(x=>!x.p.aramaYok&&gkEligible(x)&&gkInfo(x).r.length&&x.since>=21&&!(x.eps>=5&&x.since<60&&!gkInfo(x).regLate)).map(x=>Object.assign(x,{sc:gkInfo(x).sc})).sort((a,b)=>b.sc-a.sc);
+function lastSvc(p){const v=S.visits.filter(v=>v.patientId===p.id&&v.tarih).sort((a,b)=>b.tarih.localeCompare(a.tarih))[0];return v?(v.hizmetAd||[]).join(', '):'';}
+function gkRow(x,extra){
+  const p=x.p,g=gkInfo(x);
+  return `<div class="card"><div data-act="go" data-p="patient" data-id="${p.id}"><b>${esc(pname(p))}</b>${extra||''}
+  ${g.r.map(t=>`<div style="font-size:14px;margin-top:2px">• ${t}</div>`).join('')}
+  <div class="muted" style="margin-top:3px">Son: ${esc(lastSvc(p)||'ziyaret')} · ${fd(x.last)} · ${x.eps} kez · toplam ${money(x.ciro)}</div>
+  ${x.lastCall?`<div class="muted">Son temas: ${fd(x.lastCall)} · ${esc((GKSONUC[x.lastSonuc]||'Arandı').replace(/^\S+\s/,''))}</div>`:''}
+  ${x.openCall?'<span class="badge org">aranacaklar listesinde</span>':''}${x.openPlan?'<span class="badge grn">planı var</span>':''}${p.aramaYok?`<span class="badge red">listeden çıkarıldı: ${esc(p.aramaYok.sebep)}</span>`:''}</div>
+  <div class="btns" style="margin-top:8px">${p.tel?`<a class="btn sm gray" href="tel:${esc(p.tel)}">📞 Ara</a>`:''}${p.tel?`<button class="btn sm gray" data-act="gkMsg" data-id="${p.id}">💬 Mesaj</button>`:''}${p.aramaYok?`<button class="btn sm gray" data-act="gkBack" data-id="${p.id}">Listeye geri al</button>`:`<button class="btn sm" data-act="gkRes" data-id="${p.id}">✅ Sonuç</button>`}</div></div>`;
+}
+function gkReport(){
+  const from=addDays(today(),-90);
+  const cs=S.calls.filter(c=>c.gk&&c.done&&c.doneAt>=from);
+  const pids=[...new Set(cs.map(c=>c.patientId))];
+  let won=0,ciro=0;
+  pids.forEach(id=>{const first=cs.filter(c=>c.patientId===id).map(c=>c.doneAt).sort()[0];const vs=S.visits.filter(v=>v.patientId===id&&v.tarih>=first);if(vs.some(v=>dayDiff(first,v.tarih)<=60)){won++;ciro+=vs.reduce((a,v)=>a+num(v.ucret),0);}});
+  return {n:pids.length,won,ciro};
+}
+function anGK(st){
+  const seg=R.gs||'oncelik',ty=R.aty||'all';
+  const rep=gkReport();
+  let h=`<div class="card sum"><b>Son 3 ayda geri kazanma</b><table class="tb" style="margin-top:4px"><tr><td>Aradığın / mesaj attığın hasta</td><td class="r">${rep.n}</td></tr><tr><td>Sonra tekrar çağıran</td><td class="r grn"><b>${rep.won}</b>${rep.n?` <span class="muted">(%${Math.round(rep.won/rep.n*100)})</span>`:''}</td></tr><tr><td>Geri dönenlerin getirdiği ciro</td><td class="r grn"><b>${money(rep.ciro)}</b></td></tr></table></div>`;
+  const segs=[['oncelik','🔥 Öncelikli'],['gecikmis','⏰ Gecikmiş düzenli'],['kayip','🔁 Kaybedilen'],['tek','👋 Tek seferlik'],['sadik','⭐ Eski sadıklar'],['dogum','🎂 Doğum günü'],['cikan','🚫 Çıkarılanlar']];
+  h+=`<div class="chips">${segs.map(s=>`<button class="chip ${seg===s[0]?'on':''}" data-act="gkSeg" data-t="${s[0]}">${s[1]}</button>`).join('')}</div>`;
+  if(seg!=='cikan')h+=`<div class="muted" style="margin:2px 2px 4px">Hizmet türü:</div><div class="chips" style="margin-bottom:8px">${ATYPES.map(t=>`<button class="chip ${ty===t[0]?'on':''}" data-act="anType" data-t="${t[0]}">${t[1]}</button>`).join('')}</div>`;
+  const live=st.filter(x=>!x.p.aramaYok);
+  if(seg==='oncelik'){
+    const L=gkQueue(live);
+    h+=`<div class="note"><b>Bugün kimi arayayım?</b> Uygulama, sana en çok kazandırmış ve geri gelme ihtimali en yüksek eski hastaları üste koyar. Günde 3-5 arama yeter. Aradıktan sonra <b>Sonuç</b>'a bas: randevu verenler plana, "düşünecek" diyenler hatırlatmaya geçer; ulaşamadıkların bir hafta sonra listeye geri gelir.<br><button class="btn sm gray" style="margin-top:6px" data-act="gkTpl">✏️ Mesaj şablonları</button></div>`;
+    h+=`<div class="muted" style="margin:0 2px 8px">${L.length} hasta sırada</div>`+(L.slice(0,40).map((x,i)=>gkRow(x,` <span class="badge">${i+1}. sıra</span>`)).join('')||'<div class="empty">Şu an aranacak eski hasta yok 👍</div>');
+  }
+  if(seg==='gecikmis'){
+    h+=`<div class="note">Belli aralıklarla çağıran (en az 3 kez) ve normal aralığını geçen hastalar. Kür günleri tek sefer sayılır. Bunlar en kolay geri kazanılanlardır: alışkanlıkları var, sadece hatırlatma bekliyorlar.</div>`;
+    const L=live.filter(x=>x.eps>=3&&x.med>=7&&x.med<=400&&x.since>=x.med*0.85).sort((a,b)=>(b.since/b.med)-(a.since/a.med));
+    h+=`<div class="muted" style="margin:0 2px 8px">${L.length} hasta</div>`+(L.slice(0,150).map(x=>gkRow(x,x.since>x.med*1.25?` <span class="badge red">${x.since-x.med} gün gecikti</span>`:' <span class="badge org">zamanı geldi</span>')).join('')||'<div class="empty">Yok</div>');
+  }
+  if(seg==='kayip'){
     const ay=R.akd||6;
-    h+=`<div class="note">Eskiden en az 2 kez çağırıp <b>${ay} aydan uzun süredir</b> çağırmayan hastalar, en çok kazandırandan başlayarak. Düzenli gelen biri için normal aralığının 2,5 katı geçtiyse de listeye girer. Arayıp hatırlatmak için iyi bir liste.</div>
-    <div class="seg">${[3,6,12,24].map(m=>`<button class="${ay===m?'on':''}" data-act="anKd" data-m="${m}">${m} ay+</button>`).join('')}</div>`;
-    const L=st.filter(x=>x.eps>=2&&x.since>Math.max(ay*30,x.med&&x.eps>=3?x.med*2.5:0)).sort((a,b)=>b.ciro-a.ciro);
-    h+=`<div class="muted" style="margin:0 2px 8px">${L.length} hasta</div>`+(L.slice(0,150).map(x=>anRow(x,`Son ziyaret ${fd(x.last)} (${agoTxt(x.since)} önce) · ${x.eps} kez · toplam ${money(x.ciro)}${x.med&&x.eps>=3?' · eskiden '+x.med+' günde bir':''}`)).join('')||'<div class="empty">Yok</div>');
+    h+=`<div class="note">Eskiden en az 2 kez çağırıp <b>${ay} aydan uzun süredir</b> çağırmayanlar, en çok kazandırandan başlayarak.</div><div class="seg">${[3,6,12,24].map(m=>`<button class="${ay===m?'on':''}" data-act="anKd" data-m="${m}">${m} ay+</button>`).join('')}</div>`;
+    const L=live.filter(x=>x.eps>=2&&x.since>ay*30).sort((a,b)=>b.ciro-a.ciro);
+    h+=`<div class="muted" style="margin:0 2px 8px">${L.length} hasta · geçmişte toplam ${money(L.reduce((a,x)=>a+x.ciro,0))} getirmişlerdi</div>`+(L.slice(0,150).map(x=>gkRow(x)).join('')||'<div class="empty">Yok</div>');
   }
-  if(tab==='duzenli'){
-    h+=`<div class="note">Belli aralıklarla çağıran hastalar (en az 3 kez). Arka arkaya günlerdeki kür tek sefer sayılır. <b>Gecikti</b> yazanların normal aralığı geçmiş; aramak için doğru zaman. Çok uzun süredir gelmeyenler <b>Kaybedilen</b> sekmesindedir.</div>`;
-    const L=st.filter(x=>x.eps>=3&&x.med>=7&&x.med<=400&&x.since<=Math.max(x.med*4,120)).map(x=>Object.assign(x,{late:x.since-x.med})).sort((a,b)=>(b.late/b.med)-(a.late/a.med));
-    h+=`<div class="muted" style="margin:0 2px 8px">${L.length} hasta</div>`+(L.slice(0,150).map(x=>{
-      const b=x.since>x.med*1.25?`<span class="badge red">${x.late} gün gecikti</span>`:x.since>=x.med*0.85?'<span class="badge org">zamanı geldi</span>':`<span class="badge grn">${x.med-x.since} gün sonra</span>`;
-      return anRow(x,`Ortalama <b>${x.med} günde bir</b> · ${x.eps} kez · son ${fd(x.last)} (${agoTxt(x.since)} önce) · beklenen ${fd(addDays(x.last,x.med))}`,b);
-    }).join('')||'<div class="empty">Henüz düzenli gelen hasta yok</div>');
+  if(seg==='tek'){
+    h+=`<div class="note">Son 4 ayda <b>ilk kez</b> çağırıp bir daha çağırmayanlar (3 haftadan eski). "Geçmiş olsun, nasılsınız?" araması hem güven verir hem de seni tekrar akıllarına getirir.</div>`;
+    const L=live.filter(x=>x.eps===1&&x.since>=21&&x.since<=120).sort((a,b)=>a.since-b.since);
+    h+=`<div class="muted" style="margin:0 2px 8px">${L.length} hasta</div>`+(L.map(x=>gkRow(x)).join('')||'<div class="empty">Yok</div>');
   }
-  if(tab==='sik'){
-    h+=`<div class="note">En çok çağıran hastalar. "Kez", arka arkaya günlerdeki kürü tek sayar; ziyaret sayısı ayrıca yazıyor.</div>`;
-    const L=st.sort((a,b)=>b.eps-a.eps||b.ciro-a.ciro).slice(0,60);
-    h+=L.map((x,i)=>anRow(x,`<b>${i+1}.</b> ${x.eps} kez (${x.n} ziyaret) · toplam ${money(x.ciro)} · son ${fd(x.last)}${x.since>180?` <span class="red">(${agoTxt(x.since)} önce)</span>`:''}`)).join('')||'<div class="empty">Yok</div>';
+  if(seg==='sadik'){
+    h+=`<div class="note">En az 5 kez çağıran hastaların, en çok kazandırandan başlayarak. 2 aydan uzun gelmeyenler kırmızı. Bunları kaybetmemek yenisini bulmaktan kolaydır: bayram mesajı, küçük bir indirim, "sizi düşündüm" araması.</div>`;
+    const L=live.filter(x=>x.eps>=5).sort((a,b)=>b.ciro-a.ciro);
+    h+=`<div class="muted" style="margin:0 2px 8px">${L.length} hasta</div>`+(L.map(x=>gkRow(x,x.since>60?` <span class="badge red">${agoDir(x.since)} yok</span>`:` <span class="badge grn">aktif</span>`)).join('')||'<div class="empty">Henüz 5+ kez çağıran hasta yok</div>');
   }
-  if(tab==='bolge'){
-    const by=(fn)=>{const m=new Map();st.forEach(x=>{const k=fn(x.p);if(!k)return;let o=m.get(k);if(!o){o={k,n:0,v:0,c:0,lost:0};m.set(k,o);}o.n++;o.v+=x.n;o.c+=x.ciro;if(x.since>180)o.lost++;});return [...m.values()].sort((a,b)=>b.c-a.c);};
-    const tb=(L,ttl)=>`<h2>${ttl}</h2><div class="card"><table class="tb"><tr><th>Yer</th><th class="r">Hasta</th><th class="r">Ciro</th></tr>${L.slice(0,25).map(o=>`<tr class="click" data-act="goSearch" data-q="${esc(o.k)}"><td>${esc(o.k)}${o.lost?`<div class="muted">${o.lost} hasta 6 aydan uzun gelmedi</div>`:''}</td><td class="r">${o.n}</td><td class="r">${money(o.c)}</td></tr>`).join('')}</table></div>`;
-    h+=`<div class="note">Hastalarının adreslerine göre. Satıra dokununca o yerdeki hastalar listelenir. Çok hastan olan bölgede tanıtım (apartman, site yönetimi, eczane) daha verimli olur.</div>`;
-    const il=by(district),mh=by(mahalle);
-    h+=il.length?tb(il,'İlçeler'):'';h+=mh.length?tb(mh,'Mahalle / site'):'';
-    if(!il.length&&!mh.length)h+='<div class="empty">Adres bilgisi olan hasta yok</div>';
+  if(seg==='dogum'){
+    h+=`<div class="note">Önümüzdeki 7 günde doğum günü olan hastaların. Kısa bir tebrik mesajı seni akıllarında tutar. (Doğum tarihi kayıtlı olanlar.)</div>`;
+    const L=live.filter(x=>x.p.dogum).map(x=>Object.assign(x,{bd:daysToBday(x.p.dogum)})).filter(x=>x.bd<=7).sort((a,b)=>a.bd-b.bd);
+    h+=L.map(x=>gkRow(x,` <span class="badge org">🎂 ${x.bd===0?'bugün':x.bd+' gün sonra'} · ${ageOf(x.p.dogum)+(x.bd===0?0:1)} yaşına giriyor</span>`)).join('')||'<div class="empty">Önümüzdeki 7 günde doğum günü olan yok</div>';
   }
+  if(seg==='cikan'){
+    const L=st.filter(x=>x.p.aramaYok);
+    h+=`<div class="note">"Başka yerden alıyor", "Taşındı", "Vefat" gibi sonuçlarla listeden çıkardığın hastalar. Listeye geri almak için düğmeye bas.</div>`+(L.map(x=>gkRow(x)).join('')||'<div class="empty">Yok</div>');
+  }
+  return h;
+}
+function gkMsgText(p,tid){const t=tpls().find(x=>x.id===tid)||tpls()[0];return tplFill(t.metin,p);}
+function gkMsgLinks(){
+  const p=patient(GKM),tx=($('#gm_text')||{}).value||'';
+  const w=$('#gm_wa'),s=$('#gm_sms');
+  if(w)w.href=`https://wa.me/${waNum(p.tel)}?text=${encodeURIComponent(tx)}`;
+  if(s)s.href=`sms:${String(p.tel).replace(/\s/g,'')}&body=${encodeURIComponent(tx)}`;
+}
+let GKM=null;
+function pTpls(){
+  const ex=S.patients.find(p=>p.ad)||{id:'',ad:'Ayşe',soyad:'Yılmaz'};
+  let h=`<div class="note">Hastaya Mesaj gönderirken durumuna uyan şablon kendiliğinden seçilir; istersen başkasına geçip metni değiştirebilirsin. Örnekler <b>${esc(firstName(ex))}</b> adıyla gösteriliyor.</div>
+  <div class="card item" data-act="tplImza"><div class="grow"><b>✍️ İmzan</b><div class="muted">${S.settings.imza?esc(S.settings.imza):'Henüz yazılmadı. Örn. "Hemşire Ayşe · 0555 ..."'}</div></div><div class="muted">›</div></div>
+  <button class="btn full" data-act="tplEdit">+ Yeni şablon</button>`;
+  h+=tpls().map(t=>`<div class="card" data-act="tplEdit" data-id="${t.id}"><b>${esc(t.ad)}</b><div class="muted" style="white-space:pre-wrap;margin-top:4px">${esc(tplFill(t.metin,ex))}</div></div>`).join('');
+  h+=`<button class="btn gray full" style="margin-top:8px" data-act="tplReset">Şablonları ilk hâline döndür</button>`;
+  return {t:'Mesaj şablonları',back:1,h};
+}
+window.logMsg=function(){
+  if(!GKM)return;
+  S.calls.push({id:uid(),patientId:GKM,visitId:null,tarih:today(),done:true,doneAt:today(),not:'Mesaj gönderildi',neden:'Geri kazanma',sonuc:'mesaj',gk:true});
+  save();setTimeout(()=>{closeModal();render(true);},300);
+};
+function anHizmet(){
+  const pr=anPeriod(),vs=S.visits.filter(v=>v.tarih&&v.tarih>=pr.from);
+  let h=periodChips();
+  const cs={};vs.forEach(v=>{const c=vCat(v),k=visitCalc(v);const o=cs[c]||(cs[c]={n:0,u:0,m:0});o.n++;o.u+=num(v.ucret);o.m+=k.maliyet;});
+  const L=Object.entries(cs).sort((a,b)=>(b[1].u-b[1].m)-(a[1].u-a[1].m)),mk=Math.max(1,...L.map(([,o])=>o.u-o.m));
+  h+=`<h2>Hizmetlere göre kâr (${pr.lab})</h2><div class="card">${L.length?L.map(([c,o])=>hbar(esc(c)+` <span class="muted">(${o.n})</span>`,o.u-o.m,mk,money(o.u-o.m))).join('')+`<table class="tb" style="margin-top:10px"><tr><th>Hizmet</th><th class="r">Ort. ücret</th><th class="r">Ort. kâr</th><th class="r">Kâr %</th></tr>${L.map(([c,o])=>`<tr><td>${esc(c)}</td><td class="r">${money(o.u/o.n)}</td><td class="r">${money((o.u-o.m)/o.n)}</td><td class="r">%${o.u?Math.round((o.u-o.m)/o.u*100):0}</td></tr>`).join('')}</table><div class="muted" style="margin-top:6px">Birden fazla hizmet içeren ziyaret ilk uyan gruba yazılır (serum önce). Giderler (yakıt vb.) burada yok, sadece ziyaret maliyeti.</div>`:'<div class="empty">Bu dönemde ziyaret yok</div>'}</div>`;
+  // kim yaptı
+  const ks={};vs.forEach(v=>{const k=isNurse(v)?(v.kimAd||'Hemşire'):'Ben',c=visitCalc(v);const o=ks[k]||(ks[k]={n:0,u:0,kar:0});o.n++;o.u+=num(v.ucret);o.kar+=c.kar;});
+  const KL=Object.entries(ks).sort((a,b)=>b[1].n-a[1].n);
+  if(KL.length>1)h+=`<h2>Kim yaptı?</h2><div class="card"><table class="tb"><tr><th></th><th class="r">Ziyaret</th><th class="r">Ciro</th><th class="r">Ort. kâr</th></tr>${KL.map(([k,o])=>`<tr><td>${esc(k)}</td><td class="r">${o.n}</td><td class="r">${money(o.u)}</td><td class="r">${money(o.kar/o.n)}</td></tr>`).join('')}</table><div class="muted" style="margin-top:6px">Hemşireye gönderdiğin ziyaretlerde ortalama kâr, kendi gittiklerine göre ne kadar düşük? Yoğun günlerde hangi işleri devretmenin mantıklı olduğunu gösterir.</div></div>`;
+  // ilaçlar
+  const ds={};vs.forEach(v=>(v.items||[]).forEach(i=>{if(i.tip==='malzeme'||i.tip==='serum')return;const k=normDrug(i.ad);const o=ds[k]||(ds[k]={n:0,a:0});o.n++;o.a+=num(i.adet);}));
+  const DL=Object.entries(ds).sort((a,b)=>b[1].n-a[1].n).slice(0,15),md=Math.max(1,...DL.map(([,o])=>o.n));
+  if(DL.length)h+=`<h2>En çok kullanılan ilaçlar</h2><div class="card">${DL.map(([k,o])=>hbar(esc(k),o.n,md,o.n+' ziyaret')).join('')}</div>`;
+  // depo tahmini
+  const fc=stockForecast();
+  h+=`<h2>Depo tahmini</h2><div class="card">${fc.length?`<div class="muted" style="margin-bottom:6px">Son 3 aydaki kullanım hızına göre elindeki stok kaç gün yeter.</div><table class="tb"><tr><th>Kalem</th><th class="r">Elde</th><th class="r">Aylık</th><th class="r">Yeter</th></tr>${fc.map(x=>`<tr class="click" data-act="stockEdit" data-id="${x.s.id}"><td>${esc(x.s.ad)}</td><td class="r">${x.s.adet}</td><td class="r">${ns(x.perMonth)}</td><td class="r ${x.days<=14?'red':x.days<=30?'org':''}"><b>${x.days==null?'—':x.days>365?'1 yıl+':x.days+' gün'}</b></td></tr>`).join('')}</table>`:'<div class="muted">Uygulamadan girilen ziyaretler biriktikçe burada hangi ilacın kaç gün yeteceği görünecek. Not defterinden aktarılan eski ziyaretler depoyla bağlantılı olmadığı için sayılmaz.</div>'}</div>`;
+  return h;
+}
+function anZaman(){
+  const pr=anPeriod(),vs=S.visits.filter(v=>v.tarih&&v.tarih>=pr.from);
+  let h=periodChips();
+  const GN=['Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi','Pazar'],wd=[0,0,0,0,0,0,0],wu=[0,0,0,0,0,0,0];
+  vs.forEach(v=>{const [y,m,d]=v.tarih.split('-').map(Number);const i=(new Date(y,m-1,d).getDay()+6)%7;wd[i]++;wu[i]+=num(v.ucret);});
+  const mw=Math.max(1,...wd);
+  h+=`<h2>Haftanın günleri (${pr.lab})</h2><div class="card">${GN.map((g,i)=>hbar(g,wd[i],mw,wd[i]+' · '+money(wu[i]))).join('')}<div class="muted" style="margin-top:6px">Sakin günlerde kampanya veya kontrol ziyaretleri planlamak, yoğun günlerde hemşireye iş devretmek için.</div></div>`;
+  const HB=[['00–08',0,8],['08–11',8,11],['11–14',11,14],['14–17',14,17],['17–20',17,20],['20–24',20,24]],hc=HB.map(()=>0);let nh=0;
+  vs.forEach(v=>{const m=String(v.saat||'').match(/^(\d{1,2}):/);if(!m)return;nh++;const hr=+m[1];HB.forEach((b,i)=>{if(hr>=b[1]&&hr<b[2])hc[i]++;});});
+  if(nh)h+=`<h2>Saatler</h2><div class="card">${HB.map((b,i)=>hbar(b[0],hc[i],Math.max(1,...hc),String(hc[i]))).join('')}<div class="muted" style="margin-top:6px">${nh} ziyaretin saati kayıtlı (not defterinden aktarılanların saati yok).</div></div>`;
+  // yılın ayları (tüm zamanlar, yıllık ortalama)
+  const mc=Array(12).fill(0),yrs=Array(12).fill(null).map(()=>new Set());
+  S.visits.forEach(v=>{if(!v.tarih)return;const m=+v.tarih.slice(5,7)-1;mc[m]++;yrs[m].add(v.tarih.slice(0,4));});
+  const avg=mc.map((c,i)=>yrs[i].size?c/yrs[i].size:0),ma=Math.max(1,...avg);
+  if(S.visits.length)h+=`<h2>Yılın ayları (tüm yılların ortalaması)</h2><div class="card">${MN.map((n,i)=>hbar(n,avg[i],ma,avg[i]?ns(Math.round(avg[i]*10)/10):'—')).join('')}<div class="muted" style="margin-top:6px">Mevsimsel yoğunluk (grip, bayram, yaz). Yoğun aydan önce depoyu doldurmak, sakin ayda tanıtım yapmak için.</div></div>`;
+  return h;
+}
+function anBolge(st){
+  const by=fn=>{const m=new Map();st.forEach(x=>{const k=fn(x.p);if(!k)return;let o=m.get(k);if(!o){o={k,n:0,v:0,c:0,lost:0};m.set(k,o);}o.n++;o.v+=x.n;o.c+=x.ciro;if(x.since>180)o.lost++;});return [...m.values()].sort((a,b)=>b.c-a.c);};
+  const tb=(L,ttl)=>`<h2>${ttl}</h2><div class="card"><table class="tb"><tr><th>Yer</th><th class="r">Hasta</th><th class="r">Ciro</th></tr>${L.slice(0,25).map(o=>`<tr class="click" data-act="goSearch" data-q="${esc(o.k)}"><td>${esc(o.k)}${o.lost?`<div class="muted">${o.lost} hasta 6 aydan uzun gelmedi</div>`:''}</td><td class="r">${o.n}</td><td class="r">${money(o.c)}</td></tr>`).join('')}</table></div>`;
+  let h=`<div class="note">Hastalarının adreslerine göre. Satıra dokununca o yerdeki hastalar listelenir. Çok hastan olan bölgede tanıtım (site yönetimi, eczane, apartman panosu) daha verimli olur; aynı bölgedeki ziyaretleri aynı güne toplamak yakıttan tasarruf ettirir.</div>`;
+  const il=by(district),mh=by(mahalle);
+  h+=il.length?tb(il,'İlçeler'):'';h+=mh.length?tb(mh,'Mahalle / site'):'';
+  if(!il.length&&!mh.length)h+='<div class="empty">Adres bilgisi olan hasta yok</div>';
+  return h;
+}
+function pAnalysis(){
+  const tab=R.at==='hasta'?'gk':(R.at||'gk');
+  const tabs=[['gk','Geri kazan'],['ozet','Özet'],['hizmet','Hizmet'],['zaman','Zaman'],['bolge','Bölge']];
+  let h=`<div class="seg">${tabs.map(t=>`<button class="${tab===t[0]?'on':''}" data-act="anTab" data-t="${t[0]}">${t[1]}</button>`).join('')}</div>`;
+  if(!S.visits.length)return {t:'Analiz',back:1,h:h+'<div class="empty">Ziyaret kaydı biriktikçe burası dolacak.</div>'};
+  const st=patStats(tab==='gk'?(R.aty||'all'):'all');
+  if(tab==='ozet')h+=anOzet(st);
+  if(tab==='gk')h+=anGK(st);
+  if(tab==='hizmet')h+=anHizmet();
+  if(tab==='zaman')h+=anZaman();
+  if(tab==='bolge')h+=anBolge(st);
   return {t:'Analiz',back:1,h};
 }
 
@@ -1487,17 +1740,77 @@ function movements(id){
   S.expenses.forEach(e=>{if(e.hesap===id)L.push({tarih:e.tarih,t:-num(e.tutar),ad:e.kategori,sub:e.aciklama||'',act:`data-act="expEdit" data-id="${e.id}"`});});
   S.purchases.forEach(p=>{if(p.hesap===id)L.push({tarih:p.tarih,t:-num(p.tutar),ad:'Depo alımı',sub:p.ad||'',act:`data-act="purEdit" data-id="${p.id}"`});});
   S.extPay.forEach(e=>{if(e.hesap===id)L.push({tarih:e.tarih,t:-num(e.tutar),ad:e.tip==='lab'?'ULTRALAB ödemesi':'Hemşire: '+e.ad,sub:e.not||'',act:`data-act="payEdit" data-id="${e.id}"`});});
+  (S.transfers||[]).forEach(tr=>{
+    const f=accById(tr.from),t=accById(tr.to),act=`data-act="trEdit" data-id="${tr.id}"`;
+    if(tr.from===id)L.push({tarih:tr.tarih,t:-num(tr.tutar),ad:t&&t.tip==='kisisel'?'👤 Kendime aktardım':'↔ Aktarım → '+(t?t.ad:'?'),sub:tr.not||'',act,tr:1});
+    if(tr.to===id)L.push({tarih:tr.tarih,t:num(tr.tutar),ad:f&&f.tip==='kisisel'?(accById(id)&&accById(id).tip==='kisisel'?'Kendime aktardım':'👤 Cebimden işletmeye koydum'):(accById(id)&&accById(id).tip==='kisisel'?'👤 İşletmeden aldığım ('+(f?f.ad:'?')+')':'↔ Aktarım ← '+(f?f.ad:'?')),sub:tr.not||'',act,tr:1});
+  });
   return L.sort((a,b)=>b.tarih.localeCompare(a.tarih));
 }
 const ymNow=()=>today().slice(0,7);
 const ymTitle=ym=>MN[+ym.slice(5,7)-1]+' '+ym.slice(0,4);
 const ymAdd=(ym,n)=>{const d=new Date(+ym.slice(0,4),+ym.slice(5,7)-1+n,1);return d.getFullYear()+'-'+pad(d.getMonth()+1);};
+/* ---------- Bakiye ve aktarımlar ---------- */
+const hasBal=a=>a&&(a.tip==='banka'||a.tip==='nakit');
+// Bakiye: son elle girilen bakiye + o tarihten SONRAKİ hareketler
+function lastBal(id){return (S.balAdj||[]).filter(b=>b.hesap===id).sort((a,b)=>(a.tarih+(a.at||'')).localeCompare(b.tarih+(b.at||''))).pop()||null;}
+function balance(id){
+  const cp=lastBal(id);if(!cp)return null;
+  return round2(num(cp.bakiye)+movements(id).filter(x=>x.tarih>cp.tarih).reduce((s,x)=>s+x.t,0));
+}
+function balAt(id,tarih){ // tarih günü sonundaki hesaplanan bakiye (o güne kadarki son elle girişe göre)
+  const cps=(S.balAdj||[]).filter(b=>b.hesap===id&&b.tarih<=tarih).sort((a,b)=>(a.tarih+(a.at||'')).localeCompare(b.tarih+(b.at||'')));
+  const cp=cps.pop();if(!cp)return null;
+  return round2(num(cp.bakiye)+movements(id).filter(x=>x.tarih>cp.tarih&&x.tarih<=tarih).reduce((s,x)=>s+x.t,0));
+}
+const isOwnerOut=tr=>{const a=accById(tr.to);return a&&a.tip==='kisisel';};
+function ownerTotals(from,to){
+  let cek=0,koy=0;
+  (S.transfers||[]).forEach(tr=>{if(tr.tarih<from||tr.tarih>to)return;const f=accById(tr.from),t=accById(tr.to);if(t&&t.tip==='kisisel'&&(!f||f.tip!=='kisisel'))cek+=num(tr.tutar);if(f&&f.tip==='kisisel'&&(!t||t.tip!=='kisisel'))koy+=num(tr.tutar);});
+  return {cek:round2(cek),koy:round2(koy)};
+}
+function balForm(a,b){
+  const calc=balance(a.id);
+  openForm({title:(b?'Bakiye kaydını düzenle: ':'Bakiyeyi güncelle: ')+a.ad,
+    note:b?'':(calc!=null?`Uygulamanın hesapladığı bakiye: <b>${money(calc)}</b>. Bankadaki gerçek tutarı yaz; fark varsa kayda geçmemiş bir hareket vardır.`:'Hesapta şu an ne kadar para olduğunu yaz. Bundan sonraki tahsilat, gider ve aktarımlar bu tutarın üstüne eklenip düşülür.')+' Bugünün hareketleri bu tutarın içinde sayılır.',
+    fields:[{k:'tarih',label:'Tarih',type:'date',value:b?b.tarih:today()},{k:'bakiye',label:'Hesapta olan tutar (TL)',type:'num',value:b?ns(b.bakiye):''},{k:'not',label:'Not (isteğe bağlı)',value:b?b.not:''}],
+    onDelete:b?()=>{if(!confirm('Bu bakiye kaydı silinsin mi?'))return;S.balAdj=S.balAdj.filter(x=>x!==b);save();closeModal();render(true);}:null,
+    onSave:v=>{
+      if(!v.tarih||v.bakiye===''){toast('Tarih ve tutar yaz');return false;}
+      const val=parseFloat(String(v.bakiye).replace(/\./g,'').replace(',','.'));if(!isFinite(val)){toast('Tutar geçersiz');return false;}
+      const o={hesap:a.id,tarih:v.tarih,bakiye:round2(val),not:v.not,at:new Date().toISOString(),onceki:b?b.onceki:balAt(a.id,v.tarih)};
+      if(b)Object.assign(b,o);else{S.balAdj=S.balAdj||[];S.balAdj.push(Object.assign({id:uid()},o));}
+      save();render(true);toast('Bakiye kaydedildi');
+    }});
+}
+function trForm(tr,fromId){
+  const biz=S.accounts.filter(a=>a.tip!=='kisisel'),own=S.accounts.find(a=>a.tip==='kisisel');
+  const toOpts=[...(own?[[own.id,'👤 Kendi kişisel hesabıma (işletmeden çıkış)']]:[]),...S.accounts.filter(a=>a.tip!=='kisisel').map(a=>[a.id,accLabel(a)])];
+  openForm({title:tr?'Aktarımı düzenle':'Para çek / aktar',
+    note:'Kendine aktardığın para <b>gider değildir</b>, kârı değiştirmez; sadece işletme hesabından çıkar. Bankadan nakit çektiysen "Nereye" kısmında Nakit\'i seç.',
+    fields:[{k:'from',label:'Nereden',type:'select',options:[...biz,...(own?[own]:[])].map(a=>[a.id,a.tip==='kisisel'?'👤 Kendi cebimden (işletmeye para koydum)':accLabel(a)]),value:tr?tr.from:(fromId||defHesap())},
+      {k:'to',label:'Nereye',type:'select',options:toOpts,value:tr?tr.to:(own?own.id:'')},
+      {k:'tutar',label:'Tutar (TL)',type:'num',value:tr?ns(tr.tutar):''},{k:'tarih',label:'Tarih',type:'date',value:tr?tr.tarih:today()},{k:'not',label:'Not (isteğe bağlı)',value:tr?tr.not:''}],
+    onDelete:tr?()=>{if(!confirm('Aktarım silinsin mi?'))return;S.transfers=S.transfers.filter(x=>x!==tr);save();closeModal();render(true);}:null,
+    onSave:v=>{
+      if(v.from===v.to){toast('Nereden ve nereye aynı olamaz');return false;}
+      if(num(v.tutar)<=0||!v.tarih){toast('Tutar ve tarih gerekli');return false;}
+      const o={from:v.from,to:v.to,tutar:num(v.tutar),tarih:v.tarih,not:v.not};
+      if(tr)Object.assign(tr,o);else{S.transfers=S.transfers||[];S.transfers.push(Object.assign({id:uid()},o));}
+      save();render(true);toast('Aktarım kaydedildi');
+    }});
+}
+
 function pAccounts(){
-  const ym=ymNow();
-  let h=`<div class="note">Hastadan gelen para ziyarette veya "Ödeme al"da seçtiğin hesaba yazılır. Giderlerde, depo alımlarında ve ödemelerde hangi hesaptan ödediğini seçersin.<br><b>👤 Kişisel kart / cebimden:</b> İşin giderini kendi kişisel kartınla veya cebinden ödediysen bunu seç. Gider kârdan düşer ama işletmenin banka ve nakit hesabından bir şey eksilmez. Kişisel kartındaki diğer alışverişleri buraya hiç girme.</div><button class="btn full" data-act="accNew">+ Banka hesabı / kredi kartı ekle</button>`;
+  const ym=ymNow(),y=ym.slice(0,4);
+  let h=`<div class="note">Hastadan gelen para ziyarette veya "Ödeme al"da seçtiğin hesaba yazılır. Giderlerde hangi hesaptan ödediğini seçersin.<br><b>👤 Kişisel kart / cebimden:</b> İşin giderini kendi kartınla veya cebinden ödediysen bunu seç; gider kârdan düşer ama işletmenin banka ve nakit hesabından bir şey eksilmez.</div>`;
+  const bz=S.accounts.filter(hasBal),bals=bz.map(a=>balance(a.id)),known=bals.filter(b=>b!=null);
+  const om=ownerTotals(ym+'-01',ym+'-31'),oy=ownerTotals(y+'-01-01',y+'-12-31');
+  h+=`<div class="card sum"><table class="tb">${known.length?`<tr class="tot"><td>İşletmedeki para (banka + nakit)</td><td class="r">${money(known.reduce((a,b)=>a+b,0))}</td></tr>`:''}<tr><td>Bu ay kendine aktardığın</td><td class="r">${money(om.cek)}</td></tr><tr><td>${y} yılında kendine aktardığın</td><td class="r">${money(oy.cek)}</td></tr></table>${known.length<bz.length?`<div class="muted" style="margin-top:6px">${bz.length-known.length} hesabın bakiyesi girilmemiş. Hesaba dokun → "Bakiyeyi güncelle".</div>`:''}</div>`;
+  h+=`<div class="row" style="margin-bottom:10px"><button class="btn" data-act="trNew">💸 Para çek / aktar</button><button class="btn gray" data-act="accNew">+ Hesap / kart</button></div>`;
   h+=`<h2>${ymTitle(ym)}</h2>`;
-  h+=S.accounts.map(a=>{const L=movements(a.id).filter(x=>x.tarih.slice(0,7)===ym);const gi=L.filter(x=>x.t>0).reduce((s,x)=>s+x.t,0),ci=Math.abs(L.filter(x=>x.t<0).reduce((s,x)=>s+x.t,0));
-    return `<div class="card item" data-act="go" data-p="account" data-id="${a.id}"><div style="font-size:24px">${accIcon(a)}</div><div class="grow"><b>${esc(a.ad)}</b><div class="muted">${esc(ACCTIP[a.tip]||'')}${a.not?' · '+esc(a.not):''}</div><div class="muted">Bu ay: ${outOnly(a)?'':`<span class="grn">giren ${money(gi)}</span> · `}<span class="red">${a.tip==='kisisel'?'işletme adına ödediğin':a.tip==='kart'?'harcama':'çıkan'} ${money(ci)}</span></div></div><div class="muted">›</div></div>`;}).join('');
+  h+=S.accounts.map(a=>{const L=movements(a.id).filter(x=>x.tarih.slice(0,7)===ym);const gi=L.filter(x=>x.t>0).reduce((s,x)=>s+x.t,0),ci=Math.abs(L.filter(x=>x.t<0).reduce((s,x)=>s+x.t,0));const b=hasBal(a)?balance(a.id):null;
+    return `<div class="card item" data-act="go" data-p="account" data-id="${a.id}"><div style="font-size:24px">${accIcon(a)}</div><div class="grow"><b>${esc(a.ad)}</b><div class="muted">${esc(ACCTIP[a.tip]||'')}${a.not?' · '+esc(a.not):''}</div><div class="muted">Bu ay: ${a.tip==='kisisel'?`işletme adına ödediğin <span class="red">${money(Math.abs(L.filter(x=>x.t<0&&!x.tr).reduce((s,x)=>s+x.t,0)))}</span> · işletmeden aldığın <span class="grn">${money(L.filter(x=>x.t>0&&x.tr).reduce((s,x)=>s+x.t,0))}</span>`:a.tip==='kart'?`harcama <span class="red">${money(ci)}</span>`:`<span class="grn">giren ${money(gi)}</span> · <span class="red">çıkan ${money(ci)}</span>`}</div></div>${hasBal(a)?`<div style="text-align:right"><div class="muted" style="font-size:12px">bakiye</div><b class="${b!=null&&b<0?'red':''}">${b==null?'—':money(b)}</b></div>`:'<div class="muted">›</div>'}</div>`;}).join('');
   const un=S.visits.filter(v=>v.tarih&&v.tarih.slice(0,7)===ym&&!v.eski&&num(v.odenen)>0&&!(v.pays||[]).length).length;
   if(un)h+=`<div class="muted" style="margin:6px 2px">Bu ay ${un} ziyaretin ödemesi hesap seçilmeden (2.0'dan önce) kaydedilmiş, hesaplarda görünmez.</div>`;
   return {t:'Hesaplar ve kartlar',back:1,h};
@@ -1506,10 +1819,22 @@ function pAccount(){
   const a=accById(R.id);if(!a)return {t:'Hesap',back:1,h:'<div class="empty">Hesap bulunamadı</div>'};
   const ym=R.ym||ymNow(),all=movements(a.id),L=all.filter(x=>x.tarih.slice(0,7)===ym);
   const gi=L.filter(x=>x.t>0).reduce((s,x)=>s+x.t,0),ci=Math.abs(L.filter(x=>x.t<0).reduce((s,x)=>s+x.t,0));
-  let h=`<div class="item" style="margin-bottom:10px"><button class="btn sm gray" data-act="accYm" data-d="-1">‹</button><div class="grow" style="text-align:center"><b>${ymTitle(ym)}</b></div><button class="btn sm gray" data-act="accYm" data-d="1">›</button></div>`;
-  h+=`<div class="card sum"><table class="tb">${outOnly(a)?'':`<tr><td>Giren (tahsilat)</td><td class="r grn">${money(gi)}</td></tr>`}<tr><td>${a.tip==='kisisel'?'İşletme adına cebinden ödediğin':a.tip==='kart'?'Harcama':'Çıkan'}</td><td class="r red">${money(ci)}</td></tr>${outOnly(a)?'':`<tr class="tot"><td>Fark</td><td class="r ${gi-ci<0?'red':'grn'}">${money(gi-ci)}</td></tr>`}${a.tip==='kisisel'?`<tr class="sub"><td>Tüm zamanlar toplamı</td><td class="r">${money(Math.abs(all.reduce((s,x)=>s+x.t,0)))}</td></tr>`:''}</table>${a.tip==='kisisel'?'<div class="muted" style="margin-top:6px">Bu giderler kârdan düşer ama işletmenin banka ve nakit hesabını etkilemez.</div>':''}</div>`;
+  let h='';
+  if(hasBal(a)){
+    const b=balance(a.id),cp=lastBal(a.id);
+    h+=`<div class="card"><div class="muted">Şu anki bakiye</div><div class="big ${b!=null&&b<0?'red':''}">${b==null?'Girilmedi':money(b)}</div><div class="muted">${cp?`Son elle girilen: ${fd(cp.tarih)} · ${money(cp.bakiye)}. Sonrasındaki hareketler eklenip düşüldü.`:'Bankadaki gerçek tutarı bir kez yaz; sonrasını uygulama hesaplar.'}</div>
+    <div class="row" style="margin-top:8px"><button class="btn sm" data-act="balNew" data-id="${a.id}">✏️ Bakiyeyi güncelle</button><button class="btn sm gray" data-act="trNew" data-id="${a.id}">💸 Para çek / aktar</button></div></div>`;
+  }
+  h+=`<div class="item" style="margin-bottom:10px"><button class="btn sm gray" data-act="accYm" data-d="-1">‹</button><div class="grow" style="text-align:center"><b>${ymTitle(ym)}</b></div><button class="btn sm gray" data-act="accYm" data-d="1">›</button></div>`;
+  if(a.tip==='kisisel'){
+    const pd=Math.abs(L.filter(x=>x.t<0&&!x.tr).reduce((s,x)=>s+x.t,0)),al=L.filter(x=>x.t>0&&x.tr).reduce((s,x)=>s+x.t,0),ko=Math.abs(L.filter(x=>x.t<0&&x.tr).reduce((s,x)=>s+x.t,0));
+    const apd=Math.abs(all.filter(x=>x.t<0&&!x.tr).reduce((s,x)=>s+x.t,0)),aal=all.filter(x=>x.t>0&&x.tr).reduce((s,x)=>s+x.t,0);
+    h+=`<div class="card sum"><table class="tb"><tr><td>İşletme adına cebinden ödediğin</td><td class="r red">${money(pd)}</td></tr><tr><td>İşletmeden kendine aktardığın</td><td class="r grn">${money(al)}</td></tr>${ko?`<tr><td>Cebinden işletmeye koyduğun</td><td class="r">${money(ko)}</td></tr>`:''}<tr class="hd"><td colspan="2">Tüm zamanlar</td></tr><tr><td>Cebinden ödenen işletme gideri</td><td class="r">${money(apd)}</td></tr><tr><td>İşletmeden aldığın</td><td class="r">${money(aal)}</td></tr></table><div class="muted" style="margin-top:6px">Cebinden ödenen giderler kârdan düşer ama işletmenin banka ve nakit hesabını etkilemez. İşletmeden kendine aktardığın para gider değildir, kârı değiştirmez.</div></div>`;
+  }else h+=`<div class="card sum"><table class="tb">${a.tip==='kart'?'':`<tr><td>Giren</td><td class="r grn">${money(gi)}</td></tr>`}<tr><td>${a.tip==='kart'?'Harcama':'Çıkan'}</td><td class="r red">${money(ci)}</td></tr>${a.tip==='kart'?'':`<tr class="tot"><td>Fark</td><td class="r ${gi-ci<0?'red':'grn'}">${money(gi-ci)}</td></tr>`}${hasBal(a)&&balAt(a.id,ym+'-'+pad(daysInMonth(ym)))!=null?`<tr class="sub"><td>Ay sonu bakiyesi</td><td class="r">${money(balAt(a.id,ym+'-'+pad(daysInMonth(ym))))}</td></tr>`:''}</table></div>`;
   h+=`<div class="row" style="margin-bottom:10px"><button class="btn" data-act="accExp" data-id="${a.id}">+ ${outOnly(a)?'Harcama':'Gider'} ekle</button></div>`;
-  h+=L.length?L.map(x=>`<div class="card item" ${x.act}><div class="grow"><b>${esc(x.ad)}</b><div class="muted">${fd(x.tarih)}${x.sub?' · '+esc(x.sub):''}</div></div><b class="${x.t<0?'red':'grn'}">${x.t>0?'+':'−'}${money(Math.abs(x.t))}</b></div>`).join(''):'<div class="empty">Bu ay hareket yok</div>';
+  const bl=(S.balAdj||[]).filter(b=>b.hesap===a.id&&b.tarih.slice(0,7)===ym).map(b=>({tarih:b.tarih,bal:b}));
+  const rows=[...L,...bl].sort((x,y)=>y.tarih.localeCompare(x.tarih)||(y.bal?1:0)-(x.bal?1:0));
+  h+=rows.length?rows.map(x=>x.bal?`<div class="card item" data-act="balEdit" data-id="${x.bal.id}" style="background:var(--p2)"><div class="grow"><b>✏️ Bakiye güncellendi</b><div class="muted">${fd(x.tarih)}${x.bal.onceki!=null?` · uygulamaya göre ${money(x.bal.onceki)}, fark ${money(x.bal.bakiye-x.bal.onceki)}`:''}${x.bal.not?' · '+esc(x.bal.not):''}</div></div><b>${money(x.bal.bakiye)}</b></div>`:`<div class="card item" ${x.act}><div class="grow"><b>${esc(x.ad)}</b><div class="muted">${fd(x.tarih)}${x.sub?' · '+esc(x.sub):''}</div></div><b class="${x.t<0?'red':'grn'}">${x.t>0?'+':'−'}${money(Math.abs(x.t))}</b></div>`).join(''):'<div class="empty">Bu ay hareket yok</div>';
   h+=`<button class="btn gray full" style="margin-top:12px" data-act="accEdit" data-id="${a.id}">Hesabı düzenle</button>`;
   return {t:accLabel(a),back:1,h};
 }
@@ -1517,7 +1842,7 @@ function accForm(a){
   openForm({title:a?'Hesabı düzenle':'Yeni hesap / kart',
     fields:[{k:'ad',label:'Adı (örn. Ziraat, Garanti Bonus)',value:a&&a.ad},{k:'tip',label:'Türü',type:'select',options:Object.entries(ACCTIP),value:a?a.tip:'banka'},{k:'not',label:'Not (örn. son 4 hane)',value:a&&a.not}],
     onDelete:a?()=>{
-      if(movements(a.id).length){alert('Bu hesapta kayıtlı hareket var, silinemez. Adını değiştirebilirsin.');return;}
+      if(movements(a.id).length||(S.balAdj||[]).some(b=>b.hesap===a.id)){alert('Bu hesapta kayıtlı hareket var, silinemez. Adını değiştirebilirsin.');return;}
       if(!confirm('Hesap silinsin mi?'))return;S.accounts=S.accounts.filter(x=>x!==a);save();closeModal();H=[];R={page:'accounts'};render();}:null,
     onSave:v=>{if(!v.ad){toast('Ad yaz');return false;}const o={ad:v.ad,tip:v.tip,not:v.not};if(a)Object.assign(a,o);else S.accounts.push(Object.assign({id:uid()},o));save();render(true);}});
 }
@@ -1613,6 +1938,43 @@ function pCardImp(){
 
 /* ---------- 2.0 olayları ---------- */
 const A2={
+  gkSeg:d=>{R.gs=d.t;render(true);},
+  gkBack:d=>{const p=patient(d.id);delete p.aramaYok;save();render(true);toast('Listeye geri alındı');},
+  gkTpl:()=>A.go({p:'tpls'}),
+  tplEdit:d=>{const L=tpls().map(x=>Object.assign({},x));const t=d.id?L.find(x=>x.id===d.id):null;
+    openForm({title:t?'Şablonu düzenle':'Yeni şablon',note:'Hastaya göre dolanlar: <b>{ad}</b> ilk adı, <b>{adsoyad}</b>, <b>{hizmet}</b> son aldığı hizmet, <b>{sure}</b> son ziyaretten beri geçen süre, <b>{imza}</b> imzan.',
+      fields:[{k:'ad',label:'Şablon adı',value:t?t.ad:''},{k:'metin',label:'Mesaj',type:'area',value:t?t.metin:'Merhaba {ad}, \n{imza}'}],
+      onDelete:t?()=>{if(!confirm('Şablon silinsin mi?'))return;S.settings.tpls=L.filter(x=>x!==t);save();closeModal();render(true);}:null,
+      onSave:v=>{if(!v.ad||!v.metin){toast('Ad ve mesaj yaz');return false;}if(t)Object.assign(t,{ad:v.ad,metin:v.metin});else L.push({id:uid(),ad:v.ad,metin:v.metin});S.settings.tpls=L;save();render(true);}});},
+  tplImza:()=>openForm({title:'İmzan',note:'Mesajların sonuna eklenir. Örnek: "Hemşire Ayşe · 0555 123 45 67". Boş bırakırsan imza eklenmez.',fields:[{k:'imza',label:'İmza',value:S.settings.imza||''}],onSave:v=>{S.settings.imza=v.imza;save();render(true);}}),
+  tplReset:()=>{if(!confirm('Şablonlar ilk hâline dönsün mü? Kendi eklediklerin silinir.'))return;S.settings.tpls=null;save();render(true);},
+  gkTplOld:()=>openForm({title:'Mesaj şablonu',note:'Şunları yazarsan hastaya göre dolar: <b>{ad}</b> (ilk adı), <b>{adsoyad}</b>, <b>{hizmet}</b> (son aldığı hizmet), <b>{sure}</b> (ne kadar zaman önce). Mesaj, sen WhatsApp veya SMS ile gönderince çıkar; uygulama kendisi bir şey göndermez.',
+    fields:[{k:'t',label:'Mesaj',type:'area',value:S.settings.msgTpl||DEFTPL}],onSave:v=>{S.settings.msgTpl=v.t||DEFTPL;save();render(true);}}),
+  gkMsg:d=>{const p=patient(d.id);GKM=p.id;const auto=tplAuto(p),tid=d.t||auto;const tx=gkMsgText(p,tid);
+    modal(`<h3>Mesaj: ${esc(pname(p))}</h3><div class="muted">Şablon seç (uygun olan seçili geldi):</div><div class="chips">${tpls().map(t=>`<button class="chip ${t.id===tid?'on':''}" style="font-size:13px;min-height:34px;padding:5px 10px" data-act="gkMsg" data-id="${p.id}" data-t="${t.id}">${esc(t.ad)}${t.id===auto?' ✓':''}</button>`).join('')}</div><textarea id="gm_text" rows="7">${esc(tx)}</textarea><div class="muted" style="margin-top:6px">Mesajı burada değiştirebilirsin. Gönderdikten sonra uygulama "mesaj gönderildi" diye not alır, hasta 2 hafta listeden düşer.</div>
+    <div class="btns"><button class="btn gray" data-act="m-close">Vazgeç</button><a class="btn grn" id="gm_wa" target="_blank" rel="noopener" onclick="logMsg()">WhatsApp</a><a class="btn" id="gm_sms" onclick="logMsg()">SMS</a></div>`);gkMsgLinks();},
+  gkRes:d=>{const p=patient(d.id);
+    openForm({title:'Sonuç: '+pname(p),fields:[{k:'sonuc',label:'Ne oldu?',type:'select',options:Object.entries(GKSONUC).filter(([k])=>k!=='mesaj'),value:'randevu'},
+      {k:'tarih',label:'Randevu günü / ne zaman tekrar arayayım?',type:'date',value:addDays(today(),1)},{k:'not',label:'Not',type:'area',value:''}],
+      note:'Randevu verdiyse tarihi seç, planlara eklenir. "Düşünecek" ise seçtiğin gün ana sayfada aranacaklara düşer. Başka yerden alıyor, taşındı, vefat: listeden çıkar.',
+      onSave:v=>{
+        const lab=(GKSONUC[v.sonuc]||'').replace(/^\S+\s/,'');
+        S.calls.push({id:uid(),patientId:p.id,visitId:null,tarih:today(),done:true,doneAt:today(),not:lab+(v.not?': '+v.not:''),neden:'Geri kazanma',sonuc:v.sonuc,gk:true});
+        if(v.sonuc==='randevu'&&v.tarih)S.plans.push({id:uid(),patientId:p.id,tarih:v.tarih,saat:'',islem:'Geri kazanma randevusu'+(v.not?' · '+v.not:''),done:false});
+        if(v.sonuc==='dusunecek')S.calls.push({id:uid(),patientId:p.id,visitId:null,tarih:v.tarih||addDays(today(),30),done:false,neden:'Geri kazanma: tekrar ara'+(v.not?' · '+v.not:'')});
+        if(GKOUT.includes(v.sonuc))p.aramaYok={sebep:lab,tarih:today()};
+        save();render(true);toast('Kaydedildi');
+      }});},
+  balNew:d=>balForm(accById(d.id),null),
+  balEdit:d=>{const b=(S.balAdj||[]).find(x=>x.id===d.id);if(b)balForm(accById(b.hesap),b);},
+  trNew:d=>trForm(null,d.id),
+  trEdit:d=>{const t=(S.transfers||[]).find(x=>x.id===d.id);if(t)trForm(t);},
+  anSub:d=>{R.ah=d.t;render(true);},
+  anPer:d=>{R.ap=d.k;render(true);},
+  anGo:d=>{if(d.t==='debts'||d.t==='fin'){A.go({p:d.t});return;}R.at=d.t;if(d.s)R.gs=d.s;render();},
+  anMonth:d=>{R.year=+d.m.slice(0,4);monthDetail(+d.m.slice(5,7)-1);},
+  hmNav:d=>{HM=ymAdd(HM||ymNow(),+d.d);if(HM>ymNow())HM=ymNow();render(true);},
+  hmNow:()=>{HM=null;render(true);},
   goSearch:d=>{H.push(R);R={page:'patients',q:d.q};render();},
   psort:d=>{R.ps=d.s;render(true);},
   moreRecent:()=>{R.n=(R.n||50)+100;render(true);},
@@ -2027,6 +2389,7 @@ document.addEventListener('input',e=>{
   if(t.id==='im_text')IM.text=t.value;
   if(t.id==='ps_q'){R.q=t.value;$('#ps_l').innerHTML=plist(t.value,'page');}
   if(t.id==='ci_text')CI.text=t.value;
+  if(t.id==='gm_text')gkMsgLinks();
   if(t.id==='lab_q'){R.lq=t.value;$('#lab_l').innerHTML=labList(t.value);}
   if(t.id==='vt_q'){VQ=t.value;$('#vt_l').innerHTML=vtList();}
   if(t.id==='gd_q'&&GD){GD.q=t.value;$('#gd_l').innerHTML=gdList();}
@@ -2035,6 +2398,7 @@ document.addEventListener('change',e=>{
   const t=e.target;
   if(t.dataset&&t.dataset.v==='kim'){V.kim=t.value;const n=S.nurses.find(x=>x.id===t.value);V.kimAd=n?n.ad:'';render(true);return;}
   if(t.dataset&&t.dataset.v==='hesap'&&V){V.hesap=t.value;return;}
+  if(t.id==='f_sonuc'&&$('#f_tarih')){$('#f_tarih').value=t.value==='randevu'?addDays(today(),1):t.value==='dusunecek'?addDays(today(),30):t.value==='gerekyok'?addDays(today(),90):'';}
   if(t.dataset&&t.dataset.ci!==undefined&&CI.rows){
     const r=CI.rows[+t.dataset.ci];let k=t.value;
     if(k==='__new'){const n=(prompt('Yeni kategori adı:')||'').trim();if(!n){render(true);return;}if(!allCats().includes(n))S.expCats.push(n);save();k=n;}
@@ -2043,6 +2407,7 @@ document.addEventListener('change',e=>{
     if(r.key)CI.rows.forEach(o=>{if(o!==r&&!o.kat&&o.key===r.key){o.kat=k;o.manual=true;}});
     render(true);return;
   }
+  if(t.id==='hm_pick'){if(/^\d{4}-\d{2}$/.test(t.value)){HM=t.value>ymNow()?ymNow():t.value;render(true);}return;}
   if(t.id==='finyear'){R.year=+t.value;render(true);}
   if(t.id==='expyear'){R.year=+t.value;render(true);}
   if(t.id==='sv_tip'){svcSync();}
@@ -2056,6 +2421,7 @@ document.addEventListener('change',e=>{
   if(!S.settings.m15){S.settings.m15=1;if(!S.expCats.includes('Avukatlık ücreti')){const i=S.expCats.indexOf('Diğer');if(i>=0)S.expCats.splice(i,0,'Avukatlık ücreti');else S.expCats.push('Avukatlık ücreti');}await kvSet('state',S);}
   // 1.8: daha önce kesirli (0,5 gibi) kaydedilen ilaçlar: uygulanan miktar korunur, düşen adet tama yuvarlanır
   if(!S.settings.m18){S.settings.m18=1;S.visits.forEach(v=>(v.items||[]).forEach(i=>{const a=num(i.adet);if(a>0&&Math.abs(a-Math.round(a))>1e-9){i.uyg=round2(a);i.adet=Math.ceil(a);}}));await kvSet('state',S);}
+  if(!S.settings.m25){S.settings.m25=1;if(S.settings.msgTpl&&S.settings.msgTpl!==DEFTPL){S.settings.tpls=DEFTPLS.map(x=>Object.assign({},x));S.settings.tpls.unshift({id:'benim',ad:'✏️ Benim şablonum',metin:S.settings.msgTpl});}await kvSet('state',S);}
   if(!S.settings.m21){S.settings.m21=1;if(!S.accounts.some(a=>a.tip==='kisisel'))S.accounts.push({id:'h_kisisel',ad:'Kişisel kart / cebimden',tip:'kisisel'});await kvSet('state',S);}
   if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
   if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
